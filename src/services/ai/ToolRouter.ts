@@ -288,6 +288,24 @@ export class ToolRouter {
           };
         }
 
+        // ---------------------------------------------------------------------
+        // 10. MARK_ATTENDANCE (Voice/Chat Real-Time Attendance Marker)
+        // ---------------------------------------------------------------------
+        case 'mark_attendance': {
+          const result = await AttendanceEngine.markClassAttendance(
+            args.subject,
+            args.status || 'attended',
+            source
+          );
+
+          return {
+            tool: toolName,
+            success: result.success,
+            data: result,
+            message: result.message,
+          };
+        }
+
         default:
           return {
             tool: toolName,

@@ -5,6 +5,7 @@
 // =============================================================================
 
 import type { AttendanceRecord, AttendanceSummary, Subject } from '@/core/types';
+import { db, CURRENT_USER_ID } from '@/core/storage/db';
 
 export class AttendanceEngine {
   /**
@@ -108,6 +109,134 @@ export class AttendanceEngine {
       totalConducted,
       overallPercentage,
       criticalSubjectsCount,
+    };
+  }
+
+  /**
+   * Marks class attendance (present/missed) for a given or inferred class and recalculates metrics.
+   */
+  static async markClassAttendance(
+    subjectQuery?: string,
+    status: 'attended' | 'missed' = 'attended',
+    source: 'Voice' | 'Chat' | 'User Command' | 'Proactive Engine' | 'ERP Sync' = 'Voice'
+  ): Promise<{
+    success: boolean;
+    subjectName: string;
+    oldSubjectPct: number;
+    newSubjectPct: number;
+    oldOverallPct: number;
+    newOverallPct: number;
+    totalAttended: number;
+    totalConducted: number;
+    message: string;
+  }> {
+    const subjects = await db.subjects.toArray();
+    let targetSubject: Subject | undefined;
+
+    if (subjectQuery) {
+      const q = subjectQuery.toLowerCase();
+      targetSubject = subjects.find(
+        s =>
+          s.subject_name.toLowerCase().includes(q) ||
+          s.subject_code.toLowerCase().includes(q) ||
+          (q.includes('market') && s.subject_code.includes('203')) ||
+          (q.includes('law') && s.subject_code.includes('201')) ||
+          (q.includes('excel') && s.subject_code.includes('199')) ||
+          (q.includes('account') && s.subject_code.includes('202')) ||
+          (q.includes('language') && s.subject_code.includes('204')) ||
+          (q.includes('office') && s.subject_code.includes('205')) ||
+          (q.includes('tour') && s.subject_code.includes('206'))
+      );
+    }
+
+    // If no subject matched, find current day's active class from timetable
+    if (!targetSubject) {
+      const todayDay = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+      const todayClasses = await db.classes.where('day_of_week').equals(todayDay).toArray();
+      if (todayClasses.length > 0) {
+        targetSubject = subjects.find(s => s.id === todayClasses[0].subject_id);
+      }
+    }
+
+    if (!targetSubject && subjects.length > 0) {
+      targetSubject = subjects[0]; // fallback
+    }
+
+    if (!targetSubject) {
+      return {
+        success: false,
+        subjectName: 'Unknown',
+        oldSubjectPct: 0,
+        newSubjectPct: 0,
+        oldOverallPct: 0,
+        newOverallPct: 0,
+        totalAttended: 0,
+        totalConducted: 0,
+        message: 'Could not identify subject to mark attendance.',
+      };
+    }
+
+    // Get current attendance metrics before update
+    const allRecords = await db.attendance.toArray();
+    const oldSubjectRecords = allRecords.filter(r => r.subject_id === targetSubject!.id);
+    const oldSubAttended = oldSubjectRecords.filter(r => r.status === 'attended').length;
+    const oldSubTotal = oldSubjectRecords.length;
+    const oldSubjectPct = this.calculatePercentage(oldSubAttended, oldSubTotal);
+
+    const oldTotalAttended = allRecords.filter(r => r.status === 'attended').length;
+    const oldTotalConducted = allRecords.length;
+    const oldOverallPct = this.calculatePercentage(oldTotalAttended, oldTotalConducted);
+
+    // Add new attendance record for today
+    const newRecord: AttendanceRecord = {
+      id: `att-live-${Date.now()}`,
+      user_id: CURRENT_USER_ID,
+      subject_id: targetSubject.id,
+      date: new Date().toISOString().split('T')[0],
+      status,
+    };
+    await db.attendance.add(newRecord);
+
+    // Calculate new metrics
+    const newSubAttended = status === 'attended' ? oldSubAttended + 1 : oldSubAttended;
+    const newSubTotal = oldSubTotal + 1;
+    const newSubjectPct = this.calculatePercentage(newSubAttended, newSubTotal);
+
+    const newTotalAttended = status === 'attended' ? oldTotalAttended + 1 : oldTotalAttended;
+    const newTotalConducted = oldTotalConducted + 1;
+    const newOverallPct = this.calculatePercentage(newTotalAttended, newTotalConducted);
+
+    // Create AI Action Log
+    await db.actionLogs.add({
+      id: `log-${Date.now()}`,
+      user_id: CURRENT_USER_ID,
+      action_type: 'ATTENDANCE_RECORDED',
+      description: `Marked ${status.toUpperCase()} in ${targetSubject.subject_name}. Subject: ${newSubjectPct}% (${newSubAttended}/${newSubTotal}), Overall: ${newOverallPct}%.`,
+      reason: `User voice/command: mark attendance`,
+      source,
+      user_confirmed: true,
+      created_at: new Date().toISOString(),
+    });
+
+    // Cloud backup to Supabase
+    try {
+      const { SupabaseSyncService } = await import('@/services/integrations/SupabaseSyncService');
+      SupabaseSyncService.pushToCloud().catch(e => console.warn('[Supabase Sync Note]:', e));
+    } catch (e) {}
+
+    const statusWord = status === 'attended' ? 'PRESENT' : 'MISSED';
+    const message = `Marked you ${statusWord} for ${targetSubject.subject_name}. Your ${targetSubject.subject_code} attendance is now ${newSubjectPct}% (${newSubAttended}/${newSubTotal}) and your overall attendance is now ${newOverallPct}% (${newTotalAttended}/${newTotalConducted}).`;
+
+    return {
+      success: true,
+      subjectName: targetSubject.subject_name,
+      oldSubjectPct,
+      newSubjectPct,
+      oldOverallPct,
+      newOverallPct,
+      totalAttended: newTotalAttended,
+      totalConducted: newTotalConducted,
+      message,
     };
   }
 }

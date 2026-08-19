@@ -61,6 +61,13 @@ export const App: React.FC = () => {
       })
       .catch(e => console.warn('[App] DB init note:', e));
 
+    // Start 10-minute class reminder and timetable notification engine
+    import('@/services/notifications/ClassReminderService')
+      .then(({ ClassReminderService }) => {
+        ClassReminderService.start();
+      })
+      .catch(e => console.warn('[App] Class reminder service note:', e));
+
     // Local continuous mic background Wake-Word ("Hey Julie") listener
     let unsubLocalWakeWord: (() => void) | null = null;
     import('@/services/voice/WakeWordEngine')

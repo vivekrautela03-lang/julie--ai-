@@ -50,8 +50,24 @@ export class AIService {
     const toolResults: ToolExecutionResult[] = [];
     const qLower = cleanQuery.toLowerCase();
 
-    // Intention capture
+    // Attendance command routing
     if (
+      qLower.includes('attended') ||
+      qLower.includes('mark my attendance') ||
+      qLower.includes('mark attendance') ||
+      qLower.includes('present in class') ||
+      qLower.includes('missed class')
+    ) {
+      const isMissed = qLower.includes('missed');
+      const toolRes = await ToolRouter.executeTool(
+        'mark_attendance',
+        { subject: cleanQuery, status: isMissed ? 'missed' : 'attended' },
+        source
+      );
+      toolResults.push(toolRes);
+    }
+    // Intention capture
+    else if (
       qLower.includes('want to') ||
       qLower.includes('thinking of') ||
       qLower.includes('plan to') ||
@@ -97,8 +113,14 @@ export class AIService {
     // 5. Build system instruction with live context and Boss Lady persona
     const systemPrompt = PromptManager.getSystemPrompt(context, prefs?.assistant_tone || 'Confident & Proactive');
 
-    // 6. Query Connected Gemini Model API
-    let responseText = await GeminiClient.generateContent(cleanQuery, systemPrompt, history);
+    // If an attendance tool executed successfully, use its deterministic mathematical result
+    const attendanceTool = toolResults.find(t => t.tool === 'mark_attendance' && t.success);
+    let responseText: string | null = attendanceTool?.message || null;
+
+    // 6. Query Connected Gemini Model API if no direct deterministic message
+    if (!responseText) {
+      responseText = await GeminiClient.generateContent(cleanQuery, systemPrompt, history);
+    }
 
     // Fallback if network or model temporarily unavailable
     if (!responseText) {
