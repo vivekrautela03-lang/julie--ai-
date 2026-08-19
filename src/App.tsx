@@ -1,7 +1,6 @@
 // =============================================================================
-// PROJECT JULIE — PREMIUM IOS-GLASS PERSONAL AI ASSISTANT (SHELL & ROUTER)
-// Primary experience: CHAT + JULIE AURA ORB.
-// All other sections accessed via the Hamburger Navigation Drawer.
+// PROJECT JULIE — PREMIUM PERSONAL AI ASSISTANT (SHELL & ROUTER)
+// Chat View with dedicated full-screen canvas + Back Arrow on all subpages.
 // =============================================================================
 
 import React, { useState, useEffect } from 'react';
@@ -101,13 +100,15 @@ export const App: React.FC = () => {
     setActiveTab('chat');
   };
 
+  const isChatView = activeTab === 'chat';
+
   return (
     <div
       className={`min-h-screen flex items-center justify-center p-0 sm:py-6 selection:bg-julie-600/30 transition-colors duration-300 ${
         theme === 'light' ? 'bg-[#F0F2F6] text-slate-900 selection:text-slate-900' : 'bg-[#050508] text-white selection:text-white'
       }`}
     >
-      {/* Mobile / iOS Frame Container */}
+      {/* Mobile Frame Container */}
       <div
         className={`w-full max-w-[430px] min-h-screen sm:min-h-[880px] sm:max-h-[920px] sm:rounded-[48px] sm:shadow-2xl sm:border-[8px] flex flex-col relative overflow-hidden transition-colors duration-300 ${
           theme === 'light'
@@ -115,14 +116,17 @@ export const App: React.FC = () => {
             : 'bg-[#07070A] border-white/10 shadow-[0_0_60px_rgba(124,58,237,0.15)] text-white'
         }`}
       >
-        {/* Global Top Header (Julie & Mini Aura Orb) */}
+        {/* Global Top Header with Back Arrow on subviews & Menu in Chat */}
         <TopHeader
+          activeTab={activeTab}
+          onBackToChat={handleReturnToChat}
+          onOpenMenu={() => setIsMenuOpen(true)}
           onOpenVoice={() => setIsVoiceOverlayOpen(true)}
           orbState={orbState}
         />
 
-        {/* Main Content Area with Bottom Navbar Padding */}
-        <main className="flex-1 overflow-y-auto overflow-x-hidden pt-1 pb-20">
+        {/* Main Content Area */}
+        <main className={`flex-1 overflow-y-auto overflow-x-hidden pt-1 ${isChatView ? 'pb-2' : 'pb-24'}`}>
           {activeTab === 'chat' && (
             <ChatView
               onOpenVoice={() => setIsVoiceOverlayOpen(true)}
@@ -131,6 +135,7 @@ export const App: React.FC = () => {
           )}
           {activeTab === 'dashboard' && (
             <DashboardView
+              onBack={handleReturnToChat}
               onNavigateToTab={setActiveTab}
               onOpenVoice={() => setIsVoiceOverlayOpen(true)}
             />
@@ -161,13 +166,15 @@ export const App: React.FC = () => {
           )}
         </main>
 
-        {/* Instagram-Style Transparent Glassmorphism Bottom Navbar */}
-        <BottomNav
-          activeTab={activeTab}
-          onSelectTab={setActiveTab}
-          onOpenMenu={() => setIsMenuOpen(true)}
-          onOpenVoice={() => setIsVoiceOverlayOpen(true)}
-        />
+        {/* Instagram-Style Transparent Glassmorphism Bottom Navbar (Hidden in Chat for clean full-screen typing) */}
+        {!isChatView && (
+          <BottomNav
+            activeTab={activeTab}
+            onSelectTab={setActiveTab}
+            onOpenMenu={() => setIsMenuOpen(true)}
+            onOpenVoice={() => setIsVoiceOverlayOpen(true)}
+          />
+        )}
 
         {/* Hamburger Navigation Drawer Menu */}
         <GlassDrawer

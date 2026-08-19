@@ -18,17 +18,20 @@ import {
   CheckSquare,
   GraduationCap,
   AlertTriangle,
+  ArrowLeft,
 } from 'lucide-react';
 import type { DrawerTab } from '@/components/common/GlassDrawer';
 import { OFFICIAL_ATTENDANCE_OVERALL, OFFICIAL_SUBJECT_ATTENDANCE } from '@/core/data/userAttendance';
 import { getTimeBasedGreeting } from '@/core/utils/greeting';
 
 interface DashboardViewProps {
+  onBack?: () => void;
   onNavigateToTab: (tab: DrawerTab) => void;
   onOpenVoice: () => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
+  onBack,
   onNavigateToTab,
   onOpenVoice,
 }) => {
@@ -53,11 +56,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     <div className="space-y-4 pb-24 px-3.5 pt-2 text-white select-none">
       {/* Header & Live Time/Weather Banner */}
       <div className="space-y-2.5">
-        <div>
-          <h1 className="text-xl font-black text-white flex items-center gap-1.5 leading-tight">
-            {timeGreeting.greeting} <span className="text-xl">{timeGreeting.emoji}</span>
-          </h1>
-          <p className="text-xs text-slate-400 font-medium">{dateStr}</p>
+        <div className="flex items-center gap-3">
+          {onBack && (
+            <button
+              onClick={onBack}
+              className="p-2 rounded-2xl liquid-pill text-slate-400 hover:text-white transition-colors shrink-0"
+              title="Return to Chat"
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+          )}
+          <div>
+            <h1 className="text-xl font-black text-white flex items-center gap-1.5 leading-tight">
+              {timeGreeting.greeting} <span className="text-xl">{timeGreeting.emoji}</span>
+            </h1>
+            <p className="text-xs text-slate-400 font-medium">{dateStr}</p>
+          </div>
         </div>
 
         {/* Liquid Glass Weather & Clock Card */}

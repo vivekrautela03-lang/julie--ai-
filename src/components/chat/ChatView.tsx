@@ -165,7 +165,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onOpenVoice, onNavigateToTab
   ];
 
   return (
-    <div className="flex flex-col h-[calc(100vh-140px)] sm:h-[740px] px-3.5 pb-2 select-none">
+    <div className="flex flex-col h-[calc(100vh-68px)] sm:h-[800px] px-3.5 pb-2 select-none">
       {/* Top Action Bar with "+ New Chat" Button */}
       <div className="flex items-center justify-between py-1 px-1 border-b border-white/5 mb-1 shrink-0">
         <div className="flex items-center gap-1.5 text-[11px] text-slate-400 font-medium">
