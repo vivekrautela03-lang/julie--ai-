@@ -1,6 +1,6 @@
 // =============================================================================
 // PROJECT JULIE — DAY COMMAND CENTER (DASHBOARD)
-// Real-time live Dehradun weather + Today/Tomorrow schedule toggle + Live Attendance.
+// Live weather + Today/Tomorrow schedule + Interactive Tasks (Add & Delete) + PWA Install & Voices.
 // =============================================================================
 
 import React, { useState, useEffect } from 'react';
@@ -8,27 +8,30 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import {
   Sparkles,
   Sun,
-  CloudSun,
   MapPin,
-  Clock,
-  ChevronRight,
-  Plus,
-  Mic,
-  Upload,
   Calendar,
   CheckSquare,
+  Square,
+  CheckCircle2,
+  Trash2,
+  Plus,
   GraduationCap,
-  AlertTriangle,
   ArrowLeft,
   Wind,
   Droplets,
+  ChevronRight,
+  Download,
+  Volume2,
 } from 'lucide-react';
 import type { DrawerTab } from '@/components/common/GlassDrawer';
 import { OFFICIAL_ATTENDANCE_OVERALL } from '@/core/data/userAttendance';
 import { OFFICIAL_WEEKLY_TIMETABLE } from '@/core/data/userTimetable';
 import { getTimeBasedGreeting } from '@/core/utils/greeting';
 import { WeatherService, type LiveWeatherData } from '@/services/integrations/WeatherService';
-import { db } from '@/core/storage/db';
+import { db, CURRENT_USER_ID } from '@/core/storage/db';
+import { VoicePersonaModal } from '@/components/settings/VoicePersonaModal';
+import { InstallAppModal } from '@/components/common/InstallAppModal';
+import type { Task } from '@/core/types';
 
 interface DashboardViewProps {
   onBack?: () => void;
@@ -47,8 +50,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [scheduleTab, setScheduleTab] = useState<'today' | 'tomorrow'>('today');
   const [weather, setWeather] = useState<LiveWeatherData | null>(null);
 
-  // Live query unread alerts count
-  const unreadAlerts = useLiveQuery(() => db.notifications.where('is_read').equals(0).count(), []);
+  // Modals
+  const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
+  const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
+
+  // New task input state
+  const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [isAddingTask, setIsAddingTask] = useState(false);
+
+  // Live query tasks
+  const tasks = useLiveQuery(() => db.tasks.toArray(), []) || [];
 
   // Fetch real-time live weather
   useEffect(() => {
@@ -72,9 +83,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     return () => clearInterval(timer);
   }, []);
 
-  // Compute Today (Wednesday = 3) and Tomorrow (Thursday = 4)
+  // Compute Today and Tomorrow
   const now = new Date();
-  const currentDayOfWeek = now.getDay(); // 0 = Sun, 1 = Mon, ..., 3 = Wed, 4 = Thu
+  const currentDayOfWeek = now.getDay();
   const todayDayIndex = currentDayOfWeek === 0 ? 1 : Math.min(6, currentDayOfWeek);
   const tomorrowDayIndex = todayDayIndex >= 6 ? 1 : todayDayIndex + 1;
 
@@ -85,26 +96,75 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     c => c.day_of_week === activeDayIndex
   ).sort((a, b) => a.start_time.localeCompare(b.start_time));
 
+  // Add Task Handler
+  const handleCreateTask = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTaskTitle.trim()) return;
+
+    const task: Task = {
+      id: `task-${Date.now()}`,
+      user_id: CURRENT_USER_ID,
+      title: newTaskTitle.trim(),
+      status: 'Planned',
+      priority: 'Medium',
+      category: 'General',
+      estimated_duration_minutes: 30,
+      recurrence: 'none',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    await db.tasks.add(task);
+    setNewTaskTitle('');
+    setIsAddingTask(false);
+  };
+
+  // Toggle Task Completion
+  const handleToggleTask = async (task: Task) => {
+    const newStatus = task.status === 'Completed' ? 'Planned' : 'Completed';
+    await db.tasks.update(task.id, {
+      status: newStatus,
+      updated_at: new Date().toISOString(),
+    });
+  };
+
+  // Delete Task Handler
+  const handleDeleteTask = async (taskId: string) => {
+    await db.tasks.delete(taskId);
+  };
+
   return (
     <div className="space-y-4 pb-24 px-3.5 pt-2 text-white select-none">
       {/* Header & Live Time/Weather Banner */}
       <div className="space-y-2.5">
-        <div className="flex items-center gap-3">
-          {onBack && (
-            <button
-              onClick={onBack}
-              className="p-2 rounded-2xl liquid-pill text-slate-400 hover:text-white transition-colors shrink-0"
-              title="Return to Chat"
-            >
-              <ArrowLeft className="w-4 h-4" />
-            </button>
-          )}
-          <div>
-            <h1 className="text-xl font-black text-white flex items-center gap-1.5 leading-tight">
-              {timeGreeting.greeting} <span className="text-xl">{timeGreeting.emoji}</span>
-            </h1>
-            <p className="text-xs text-slate-400 font-medium">{dateStr}</p>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            {onBack && (
+              <button
+                onClick={onBack}
+                className="p-2 rounded-2xl liquid-pill text-slate-400 hover:text-white transition-colors shrink-0"
+                title="Return to Chat"
+              >
+                <ArrowLeft className="w-4 h-4" />
+              </button>
+            )}
+            <div>
+              <h1 className="text-xl font-black text-white flex items-center gap-1.5 leading-tight">
+                {timeGreeting.greeting} <span className="text-xl">{timeGreeting.emoji}</span>
+              </h1>
+              <p className="text-xs text-slate-400 font-medium">{dateStr}</p>
+            </div>
           </div>
+
+          {/* Quick Install App Button */}
+          <button
+            onClick={() => setIsInstallModalOpen(true)}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-full liquid-pill text-xs font-bold text-sky-400 hover:text-white hover:bg-sky-500/20 active:scale-95 transition-all shadow-sm"
+            title="Download Julie App on Desktop & Mobile"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span className="text-[11px]">Install</span>
+          </button>
         </div>
 
         {/* Real-time Live Weather & Clock Card */}
@@ -135,6 +195,149 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </div>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* QUICK LAUNCH BAR: VOICES & INSTALL */}
+      <div className="grid grid-cols-2 gap-2.5">
+        <button
+          onClick={() => setIsVoiceModalOpen(true)}
+          className="p-3 rounded-2xl liquid-glass border border-purple-500/30 hover:border-purple-400 flex items-center gap-2.5 text-left transition-all active:scale-95"
+        >
+          <div className="w-8 h-8 rounded-xl bg-purple-500/20 text-purple-300 flex items-center justify-center">
+            <Volume2 className="w-4 h-4" />
+          </div>
+          <div>
+            <p className="text-xs font-bold text-white leading-none">Female Voices</p>
+            <p className="text-[10px] text-slate-400 mt-0.5">5 Executive Voices</p>
+          </div>
+        </button>
+
+        <button
+          onClick={() => setIsInstallModalOpen(true)}
+          className="p-3 rounded-2xl liquid-glass border border-sky-500/30 hover:border-sky-400 flex items-center gap-2.5 text-left transition-all active:scale-95"
+        >
+          <div className="w-8 h-8 rounded-xl bg-sky-500/20 text-sky-300 flex items-center justify-center">
+            <Download className="w-4 h-4" />
+          </div>
+          <div>
+            <p className="text-xs font-bold text-white leading-none">Install App</p>
+            <p className="text-[10px] text-slate-400 mt-0.5">Desktop & Mobile</p>
+          </div>
+        </button>
+      </div>
+
+      {/* INTERACTIVE TASKS SECTION (ADD & DELETE ON DASHBOARD) */}
+      <div className="liquid-glass rounded-3xl p-4 space-y-3 border border-white/10">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <CheckSquare className="w-4 h-4 text-sky-400" />
+            <h2 className="text-xs font-bold uppercase tracking-wider text-slate-300">
+              Tasks & To-Dos ({tasks.filter(t => t.status !== 'Completed').length} Pending)
+            </h2>
+          </div>
+
+          <button
+            onClick={() => setIsAddingTask(prev => !prev)}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/5 hover:bg-white/10 text-sky-400 hover:text-white text-xs font-bold transition-all"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Add Task</span>
+          </button>
+        </div>
+
+        {/* Inline Add Task Form */}
+        {isAddingTask && (
+          <form onSubmit={handleCreateTask} className="flex items-center gap-2 pt-1">
+            <input
+              type="text"
+              value={newTaskTitle}
+              onChange={e => setNewTaskTitle(e.target.value)}
+              placeholder="What needs to be done?"
+              autoFocus
+              className="flex-1 bg-white/5 border border-white/15 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-400"
+            />
+            <button
+              type="submit"
+              className="px-3 py-2 rounded-xl bg-gradient-to-r from-julie-600 to-sky-500 text-white font-bold text-xs shadow-sm hover:brightness-110 active:scale-95"
+            >
+              Add
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsAddingTask(false)}
+              className="p-2 rounded-xl bg-white/5 text-slate-400 hover:text-white"
+            >
+              Cancel
+            </button>
+          </form>
+        )}
+
+        {/* Live Tasks List with Delete & Complete */}
+        <div className="space-y-2 pt-1">
+          {tasks.length === 0 ? (
+            <p className="text-xs text-slate-500 py-3 text-center">No tasks recorded yet. Tap + Add Task to create one.</p>
+          ) : (
+            tasks.map(task => {
+              const isCompleted = task.status === 'Completed';
+
+              return (
+                <div
+                  key={task.id}
+                  className={`flex items-center justify-between p-3 rounded-2xl border transition-all ${
+                    isCompleted
+                      ? 'bg-white/[0.01] border-white/5 opacity-60'
+                      : 'bg-white/[0.03] border-white/5 hover:border-white/15'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 flex-1 min-w-0 pr-2">
+                    <button
+                      onClick={() => handleToggleTask(task)}
+                      className="text-slate-400 hover:text-sky-400 transition-colors shrink-0"
+                    >
+                      {isCompleted ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                      ) : (
+                        <Square className="w-4 h-4 text-slate-500" />
+                      )}
+                    </button>
+
+                    <span
+                      onClick={() => handleToggleTask(task)}
+                      className={`text-xs text-white truncate cursor-pointer ${
+                        isCompleted ? 'line-through text-slate-400' : 'font-medium'
+                      }`}
+                    >
+                      {task.title}
+                    </span>
+                  </div>
+
+                  {/* Priority badge & Delete/Remove Button */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span
+                      className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
+                        task.priority === 'High'
+                          ? 'bg-rose-500/20 text-rose-300'
+                          : task.priority === 'Medium'
+                          ? 'bg-amber-500/20 text-amber-300'
+                          : 'bg-sky-500/20 text-sky-300'
+                      }`}
+                    >
+                      {task.priority || 'Normal'}
+                    </span>
+
+                    <button
+                      onClick={() => handleDeleteTask(task.id)}
+                      className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                      title="Delete task"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          )}
         </div>
       </div>
 
@@ -244,34 +447,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </button>
       </div>
 
-      {/* Quick Action Grid */}
-      <div className="grid grid-cols-2 gap-3 pt-1">
-        <button
-          onClick={() => onNavigateToTab('attendance')}
-          className="liquid-glass p-3.5 rounded-3xl flex items-center gap-3 hover:border-sky-400/30 transition-all text-left"
-        >
-          <div className="w-9 h-9 rounded-2xl bg-sky-500/10 border border-sky-500/20 text-sky-400 flex items-center justify-center">
-            <GraduationCap className="w-4 h-4" />
-          </div>
-          <div>
-            <p className="text-xs font-bold text-white">60.34% Attendance</p>
-            <p className="text-[10px] text-slate-400">Mark present / missed</p>
-          </div>
-        </button>
+      {/* Modals */}
+      <VoicePersonaModal
+        isOpen={isVoiceModalOpen}
+        onClose={() => setIsVoiceModalOpen(false)}
+      />
 
-        <button
-          onClick={() => onNavigateToTab('notifications')}
-          className="liquid-glass p-3.5 rounded-3xl flex items-center gap-3 hover:border-purple-400/30 transition-all text-left"
-        >
-          <div className="w-9 h-9 rounded-2xl bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center">
-            <Sparkles className="w-4 h-4" />
-          </div>
-          <div>
-            <p className="text-xs font-bold text-white">Class Reminders</p>
-            <p className="text-[10px] text-slate-400">5-min prior alerts</p>
-          </div>
-        </button>
-      </div>
+      <InstallAppModal
+        isOpen={isInstallModalOpen}
+        onClose={() => setIsInstallModalOpen(false)}
+      />
     </div>
   );
 };
