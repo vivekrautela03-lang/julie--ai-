@@ -54,10 +54,12 @@ export const InstallAppModal: React.FC<InstallAppModalProps> = ({ isOpen, onClos
         {/* Header */}
         <div className="flex items-center justify-between border-b border-white/10 pb-3">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-2xl bg-gradient-to-tr from-julie-600 to-sky-400 p-0.5 shadow-sm">
-              <div className="w-full h-full rounded-[14px] bg-[#080912] flex items-center justify-center">
-                <Download className="w-4 h-4 text-sky-400" />
-              </div>
+            <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-julie-600 to-sky-400 p-0.5 shadow-sm overflow-hidden">
+              <img
+                src="/julie-icon.jpg"
+                alt="Julie AI"
+                className="w-full h-full rounded-[14px] object-cover"
+              />
             </div>
             <div>
               <h2 className="text-sm font-bold text-white">Install Julie App</h2>

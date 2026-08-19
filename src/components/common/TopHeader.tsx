@@ -49,10 +49,12 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
 
         {/* Brand Identity & Verified Badge */}
         <div className="flex items-center gap-2 pl-1">
-          <div className="w-7 h-7 rounded-xl bg-gradient-to-tr from-julie-600 to-sky-400 p-0.5 shadow-[0_0_12px_rgba(124,58,237,0.4)]">
-            <div className="w-full h-full rounded-[10px] bg-[#050508] flex items-center justify-center">
-              <div className="w-2.5 h-2.5 rounded-full bg-gradient-to-r from-julie-500 to-sky-400 animate-pulse" />
-            </div>
+          <div className="w-7 h-7 rounded-xl bg-gradient-to-tr from-julie-600 to-sky-400 p-0.5 shadow-[0_0_12px_rgba(124,58,237,0.5)] overflow-hidden">
+            <img
+              src="/julie-icon.jpg"
+              alt="Julie AI"
+              className="w-full h-full rounded-[10px] object-cover"
+            />
           </div>
           <div>
             <div className="flex items-center gap-1.5 leading-none">

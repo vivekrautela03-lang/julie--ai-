@@ -99,10 +99,12 @@ export const GlassDrawer: React.FC<GlassDrawerProps> = ({
         <div className="space-y-3 overflow-y-auto no-scrollbar flex-1 pr-1">
           <div className="flex items-center justify-between border-b pb-3 border-white/5">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-julie-600 to-sky-400 p-0.5 shadow-[0_0_15px_rgba(124,58,237,0.5)]">
-                <div className="w-full h-full rounded-[14px] bg-[#050508] flex items-center justify-center">
-                  <div className="w-4 h-4 rounded-full bg-gradient-to-r from-julie-500 to-sky-400 animate-pulse" />
-                </div>
+              <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-julie-600 to-sky-400 p-0.5 shadow-[0_0_15px_rgba(124,58,237,0.5)] overflow-hidden">
+                <img
+                  src="/julie-icon.jpg"
+                  alt="Julie AI"
+                  className="w-full h-full rounded-[14px] object-cover"
+                />
               </div>
               <div>
                 <div className="flex items-center gap-1.5">
