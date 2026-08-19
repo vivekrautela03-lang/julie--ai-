@@ -3,6 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { Sparkles, ChevronRight, Mic, BookOpen, Clock, Edit3, Dumbbell, Star, Calendar } from 'lucide-react';
 import { db, CURRENT_USER_ID } from '@/core/storage/db';
 import { ScheduleEngine } from '@/services/schedule/ScheduleEngine';
+import { getTimeBasedGreeting } from '@/core/utils/greeting';
 
 interface HomeViewProps {
   onNavigateToTab: (tab: any) => void;
@@ -79,11 +80,10 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigateToTab, onOpenVoice
       {/* Top Header: Greeting & Profile Avatar */}
       <div className="flex items-start justify-between pt-1">
         <div>
-          <p className="text-base text-slate-500 font-medium">Good morning,</p>
-          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight leading-tight flex items-center gap-1.5">
-            Boss. <span className="text-2xl">👋</span>
+          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight leading-tight flex items-center gap-1.5">
+            {getTimeBasedGreeting('Boss').greeting} <span className="text-2xl">{getTimeBasedGreeting('Boss').emoji}</span>
           </h1>
-          <p className="text-xs text-slate-400 font-medium mt-0.5">{currentDateStr || 'Tuesday, 18 August'}</p>
+          <p className="text-xs text-slate-400 font-medium mt-0.5">{currentDateStr || 'Wednesday, 19 August'}</p>
         </div>
 
         {/* Profile Avatar with click to settings */}

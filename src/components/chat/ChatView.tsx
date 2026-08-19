@@ -31,6 +31,7 @@ import { AIService } from '@/services/ai/AIService';
 import { FileUploadModal, type UploadedFileItem } from '@/components/files/FileUploadModal';
 import type { DrawerTab } from '@/components/common/GlassDrawer';
 import { voiceService } from '@/services/voice/VoiceService';
+import { getTimeBasedGreeting } from '@/core/utils/greeting';
 
 interface ChatViewProps {
   onOpenVoice: () => void;
@@ -45,8 +46,15 @@ export const ChatView: React.FC<ChatViewProps> = ({ onOpenVoice, onNavigateToTab
   const [attachedFile, setAttachedFile] = useState<{ name: string; size: string; content?: string } | null>(null);
   const [isDictating, setIsDictating] = useState(false);
   const [archiveNotice, setArchiveNotice] = useState<string | null>(null);
+  const [timeGreeting, setTimeGreeting] = useState(() => getTimeBasedGreeting('boss'));
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const dictationTextRef = useRef('');
+
+  useEffect(() => {
+    const update = () => setTimeGreeting(getTimeBasedGreeting('boss'));
+    const timer = setInterval(update, 30000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Live query messages from local Dexie database for current active conversation
   const messages = useLiveQuery<ConversationMessage[]>(
@@ -199,9 +207,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ onOpenVoice, onNavigateToTab
             <Sparkles className="w-3 h-3" /> Julie Intelligent Operating Layer
           </div>
           <h2 className="text-base font-extrabold text-white flex items-center gap-1.5 leading-snug">
-            Good morning, boss! <span className="text-lg">👋</span>
+            {timeGreeting.greeting} <span className="text-lg">{timeGreeting.emoji}</span>
           </h2>
-          <p className="text-xs text-slate-400">How can I help you today?</p>
+          <p className="text-xs text-slate-400">{timeGreeting.subtitle}</p>
         </div>
 
         {/* Demo Interactive Cards if active message stream is empty */}

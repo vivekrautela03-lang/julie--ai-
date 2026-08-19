@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import type { DrawerTab } from '@/components/common/GlassDrawer';
 import { OFFICIAL_ATTENDANCE_OVERALL, OFFICIAL_SUBJECT_ATTENDANCE } from '@/core/data/userAttendance';
+import { getTimeBasedGreeting } from '@/core/utils/greeting';
 
 interface DashboardViewProps {
   onNavigateToTab: (tab: DrawerTab) => void;
@@ -33,6 +34,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 }) => {
   const [timeStr, setTimeStr] = useState('09:15');
   const [dateStr, setDateStr] = useState('Wednesday, 19 August');
+  const [timeGreeting, setTimeGreeting] = useState(() => getTimeBasedGreeting('boss'));
   const overall = OFFICIAL_ATTENDANCE_OVERALL;
 
   useEffect(() => {
@@ -40,6 +42,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       const now = new Date();
       setTimeStr(now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
       setDateStr(now.toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long' }));
+      setTimeGreeting(getTimeBasedGreeting('boss'));
     };
     update();
     const timer = setInterval(update, 10000);
@@ -52,7 +55,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       <div className="space-y-2.5">
         <div>
           <h1 className="text-xl font-black text-white flex items-center gap-1.5 leading-tight">
-            Good morning, boss! <span className="text-xl">👋</span>
+            {timeGreeting.greeting} <span className="text-xl">{timeGreeting.emoji}</span>
           </h1>
           <p className="text-xs text-slate-400 font-medium">{dateStr}</p>
         </div>
