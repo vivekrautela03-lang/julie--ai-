@@ -1,0 +1,34 @@
+{
+  "project_info": {
+    "project_number": "768291038492",
+    "project_id": "julie-7a188",
+    "storage_bucket": "julie-7a188.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:768291038492:android:9d8f3a7c6e5b4a12",
+        "android_client_info": {
+          "package_name": "com.julie.ai"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "768291038492-android.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyLiveAndroidApiKeyForJulie7a188"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

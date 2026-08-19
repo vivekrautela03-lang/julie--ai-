@@ -1,0 +1,17 @@
+{
+  "auth": {
+    "authorizedDomains": [
+      "localhost",
+      "julie-7a188.firebaseapp.com",
+      "julie-7a188.web.app"
+    ],
+    "providers": {
+      "emailPassword": true,
+      "anonymous": true
+    }
+  },
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  }
+}

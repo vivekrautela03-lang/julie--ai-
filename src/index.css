@@ -1,0 +1,208 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bg-deep: #050508;
+    --bg-card: #0A0B12;
+    --text-primary: #F8FAFC;
+    --text-muted: #8E92BC;
+    --accent-purple: #8B5CF6;
+    --accent-electric: #38BDF8;
+  }
+
+  body {
+    background-color: #050508;
+    background-image: 
+      radial-gradient(at 0% 0%, rgba(124, 58, 237, 0.15) 0px, transparent 50%),
+      radial-gradient(at 100% 100%, rgba(56, 189, 248, 0.12) 0px, transparent 50%),
+      radial-gradient(at 50% 50%, rgba(15, 17, 30, 0.9) 0px, transparent 100%);
+    color: #F8FAFC;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    min-height: 100vh;
+  }
+
+  /* ChatGPT-style Light Theme Overrides */
+  body.theme-light {
+    background-color: #F6F7FA;
+    background-image: 
+      radial-gradient(at 0% 0%, rgba(124, 58, 237, 0.06) 0px, transparent 50%),
+      radial-gradient(at 100% 100%, rgba(56, 189, 248, 0.06) 0px, transparent 50%),
+      radial-gradient(at 50% 50%, rgba(255, 255, 255, 0.9) 0px, transparent 100%);
+    color: #0F172A;
+  }
+}
+
+/* -----------------------------------------------------------------------------
+ * Obsidian Liquid Glass System (Dark Mode Defaults)
+ * --------------------------------------------------------------------------- */
+.liquid-glass {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.01) 100%);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 
+    0 12px 36px 0 rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.12),
+    inset 0 0 20px 0 rgba(139, 92, 246, 0.03);
+}
+
+.liquid-glass-elevated {
+  background: linear-gradient(145deg, rgba(18, 20, 36, 0.85) 0%, rgba(10, 11, 20, 0.95) 100%);
+  backdrop-filter: blur(36px);
+  -webkit-backdrop-filter: blur(36px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 
+    0 24px 60px rgba(0, 0, 0, 0.65),
+    0 0 30px rgba(124, 58, 237, 0.15),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.15);
+}
+
+.liquid-glass-button {
+  background: linear-gradient(135deg, #7C3AED 0%, #4F46E5 50%, #3B82F6 100%);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 
+    0 8px 24px -2px rgba(124, 58, 237, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.liquid-glass-button:hover {
+  background: linear-gradient(135deg, #8B5CF6 0%, #6366F1 50%, #60A5FA 100%);
+  box-shadow: 
+    0 12px 32px -2px rgba(124, 58, 237, 0.7),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  transform: translateY(-1px);
+}
+
+.liquid-glass-button:active {
+  transform: scale(0.97);
+}
+
+.liquid-pill {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(16px);
+  transition: all 0.2s ease;
+}
+
+.liquid-pill:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.liquid-pill-active {
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.9) 0%, rgba(79, 70, 229, 0.9) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 4px 16px rgba(124, 58, 237, 0.45);
+}
+
+/* -----------------------------------------------------------------------------
+ * ChatGPT-Style Light Mode Glass System
+ * --------------------------------------------------------------------------- */
+.theme-light .liquid-glass {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(248, 250, 252, 0.95) 100%);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 
+    0 10px 30px rgba(0, 0, 0, 0.05),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.8);
+  color: #0F172A;
+}
+
+.theme-light .liquid-glass-elevated {
+  background: linear-gradient(145deg, #FFFFFF 0%, #F8FAFC 100%);
+  backdrop-filter: blur(36px);
+  -webkit-backdrop-filter: blur(36px);
+  border: 1px solid rgba(0, 0, 0, 0.09);
+  box-shadow: 
+    0 20px 45px rgba(0, 0, 0, 0.08),
+    0 0 25px rgba(124, 58, 237, 0.06),
+    inset 0 1px 0 0 rgba(255, 255, 255, 1);
+  color: #0F172A;
+}
+
+.theme-light .liquid-pill {
+  background: rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  color: #334155;
+}
+
+.theme-light .liquid-pill:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: #0F172A;
+}
+
+.theme-light .text-white {
+  color: #0F172A !important;
+}
+
+.theme-light .text-slate-300,
+.theme-light .text-slate-200 {
+  color: #334155 !important;
+}
+
+.theme-light .text-slate-400 {
+  color: #64748B !important;
+}
+
+.theme-light .text-slate-500 {
+  color: #94A3B8 !important;
+}
+
+.theme-light input,
+.theme-light textarea {
+  color: #0F172A !important;
+}
+
+.theme-light input::placeholder,
+.theme-light textarea::placeholder {
+  color: #94A3B8 !important;
+}
+
+/* -----------------------------------------------------------------------------
+ * Aura Orb Core Keyframes
+ * --------------------------------------------------------------------------- */
+@keyframes orbPlasmaRotate {
+  0% { transform: rotate(0deg) scale(1); }
+  50% { transform: rotate(180deg) scale(1.05); }
+  100% { transform: rotate(360deg) scale(1); }
+}
+
+@keyframes orbRingExpand {
+  0% { transform: scale(0.9); opacity: 0.7; }
+  50% { transform: scale(1.15); opacity: 0.3; }
+  100% { transform: scale(0.9); opacity: 0.7; }
+}
+
+@keyframes orbListenPulse {
+  0%, 100% { transform: scale(1); opacity: 0.9; }
+  50% { transform: scale(1.1); opacity: 0.4; }
+}
+
+@keyframes orbSpeakWave {
+  0%, 100% { transform: scale(1); filter: brightness(1); }
+  50% { transform: scale(1.12); filter: brightness(1.35); }
+}
+
+@keyframes slowSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin-slow {
+  animation: slowSpin 20s linear infinite;
+}
+
+/* Hide Scrollbar */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
