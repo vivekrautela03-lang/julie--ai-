@@ -5,7 +5,6 @@
 // =============================================================================
 
 import React, { useState, useEffect } from 'react';
-import { Wifi, Signal } from 'lucide-react';
 import { initializeDatabase, CURRENT_USER_ID } from '@/core/storage/db';
 import { subscribeToWakeWordTriggers } from '@/core/storage/firebase';
 
@@ -115,24 +114,6 @@ export const App: React.FC = () => {
             : 'bg-[#07070A] border-white/10 shadow-[0_0_60px_rgba(124,58,237,0.15)] text-white'
         }`}
       >
-        {/* iOS Top Status Bar (9:41, Cellular, WiFi, Battery) */}
-        <div
-          className={`pt-3 px-6 flex items-center justify-between font-semibold text-xs select-none shrink-0 z-40 backdrop-blur-xl ${
-            theme === 'light' ? 'bg-[#F8FAFC]/80 text-slate-700' : 'bg-[#07070A]/80 text-slate-300'
-          }`}
-        >
-          <span className="font-sans font-bold text-[13px]">9:41</span>
-          <div className="flex items-center gap-1.5">
-            <Signal className="w-3.5 h-3.5 fill-current" />
-            <Wifi className="w-3.5 h-3.5" />
-            <div className="flex items-center gap-0.5">
-              <div className={`w-5 h-2.5 rounded-sm border p-0.5 flex items-center ${theme === 'light' ? 'border-slate-600' : 'border-slate-300'}`}>
-                <div className={`h-full w-3 rounded-2xs ${theme === 'light' ? 'bg-slate-800' : 'bg-white'}`} />
-              </div>
-            </div>
-          </div>
-        </div>
-
         {/* Global Top Header (☰ Hamburger, Julie, Mini Aura Orb) */}
         <TopHeader
           onOpenMenu={() => setIsMenuOpen(true)}
