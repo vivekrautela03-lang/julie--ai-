@@ -9,6 +9,7 @@ import { initializeDatabase, CURRENT_USER_ID } from '@/core/storage/db';
 import { subscribeToWakeWordTriggers } from '@/core/storage/firebase';
 
 import { TopHeader } from '@/components/common/TopHeader';
+import { BottomNav } from '@/components/common/BottomNav';
 import { GlassDrawer, type DrawerTab } from '@/components/common/GlassDrawer';
 import { VoiceOverlay } from '@/components/voice/VoiceOverlay';
 import { type OrbState } from '@/components/common/JulieAuraOrb';
@@ -114,15 +115,14 @@ export const App: React.FC = () => {
             : 'bg-[#07070A] border-white/10 shadow-[0_0_60px_rgba(124,58,237,0.15)] text-white'
         }`}
       >
-        {/* Global Top Header (☰ Hamburger, Julie, Mini Aura Orb) */}
+        {/* Global Top Header (Julie & Mini Aura Orb) */}
         <TopHeader
-          onOpenMenu={() => setIsMenuOpen(true)}
           onOpenVoice={() => setIsVoiceOverlayOpen(true)}
           orbState={orbState}
         />
 
-        {/* Main Content Area */}
-        <main className="flex-1 overflow-y-auto overflow-x-hidden pt-1">
+        {/* Main Content Area with Bottom Navbar Padding */}
+        <main className="flex-1 overflow-y-auto overflow-x-hidden pt-1 pb-20">
           {activeTab === 'chat' && (
             <ChatView
               onOpenVoice={() => setIsVoiceOverlayOpen(true)}
@@ -161,12 +161,15 @@ export const App: React.FC = () => {
           )}
         </main>
 
-        {/* iOS Home Indicator Bar */}
-        <div className="py-1 flex justify-center pointer-events-none z-40">
-          <div className={`w-32 h-1 rounded-full ${theme === 'light' ? 'bg-slate-400/40' : 'bg-white/30'}`} />
-        </div>
+        {/* Instagram-Style Transparent Glassmorphism Bottom Navbar */}
+        <BottomNav
+          activeTab={activeTab}
+          onSelectTab={setActiveTab}
+          onOpenMenu={() => setIsMenuOpen(true)}
+          onOpenVoice={() => setIsVoiceOverlayOpen(true)}
+        />
 
-        {/* Hamburger Drawer Menu */}
+        {/* Hamburger Navigation Drawer Menu */}
         <GlassDrawer
           isOpen={isMenuOpen}
           activeTab={activeTab}
