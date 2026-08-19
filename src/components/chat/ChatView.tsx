@@ -158,10 +158,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ onOpenVoice, onNavigateToTab
   };
 
   const quickPills = [
-    "What's my schedule today?",
-    "What's my attendance?",
-    "Plan my evening",
-    "Summarize notes",
+    "What's my schedule tomorrow?",
+    "What's my attendance standing?",
+    "Live weather in Dehradun",
+    "Mark attendance for today's class",
   ];
 
   return (

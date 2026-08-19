@@ -1,13 +1,14 @@
 // =============================================================================
 // PROJECT JULIE — DAY COMMAND CENTER (DASHBOARD)
-// Liquid Glass layout with live clock, weather, 60.34% attendance gauge, schedule,
-// exams countdown, and quick action launchpad.
+// Real-time live Dehradun weather + Today/Tomorrow schedule toggle + Live Attendance.
 // =============================================================================
 
 import React, { useState, useEffect } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
 import {
   Sparkles,
   Sun,
+  CloudSun,
   MapPin,
   Clock,
   ChevronRight,
@@ -19,10 +20,15 @@ import {
   GraduationCap,
   AlertTriangle,
   ArrowLeft,
+  Wind,
+  Droplets,
 } from 'lucide-react';
 import type { DrawerTab } from '@/components/common/GlassDrawer';
-import { OFFICIAL_ATTENDANCE_OVERALL, OFFICIAL_SUBJECT_ATTENDANCE } from '@/core/data/userAttendance';
+import { OFFICIAL_ATTENDANCE_OVERALL } from '@/core/data/userAttendance';
+import { OFFICIAL_WEEKLY_TIMETABLE } from '@/core/data/userTimetable';
 import { getTimeBasedGreeting } from '@/core/utils/greeting';
+import { WeatherService, type LiveWeatherData } from '@/services/integrations/WeatherService';
+import { db } from '@/core/storage/db';
 
 interface DashboardViewProps {
   onBack?: () => void;
@@ -38,8 +44,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [timeStr, setTimeStr] = useState('09:15');
   const [dateStr, setDateStr] = useState('Wednesday, 19 August');
   const [timeGreeting, setTimeGreeting] = useState(() => getTimeBasedGreeting('boss'));
-  const overall = OFFICIAL_ATTENDANCE_OVERALL;
+  const [scheduleTab, setScheduleTab] = useState<'today' | 'tomorrow'>('today');
+  const [weather, setWeather] = useState<LiveWeatherData | null>(null);
 
+  // Live query unread alerts count
+  const unreadAlerts = useLiveQuery(() => db.notifications.where('is_read').equals(0).count(), []);
+
+  // Fetch real-time live weather
+  useEffect(() => {
+    WeatherService.getLiveWeather().then(data => setWeather(data));
+    const weatherTimer = setInterval(() => {
+      WeatherService.getLiveWeather().then(data => setWeather(data));
+    }, 180000); // 3 minutes
+    return () => clearInterval(weatherTimer);
+  }, []);
+
+  // Real-time live clock
   useEffect(() => {
     const update = () => {
       const now = new Date();
@@ -51,6 +71,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     const timer = setInterval(update, 10000);
     return () => clearInterval(timer);
   }, []);
+
+  // Compute Today (Wednesday = 3) and Tomorrow (Thursday = 4)
+  const now = new Date();
+  const currentDayOfWeek = now.getDay(); // 0 = Sun, 1 = Mon, ..., 3 = Wed, 4 = Thu
+  const todayDayIndex = currentDayOfWeek === 0 ? 1 : Math.min(6, currentDayOfWeek);
+  const tomorrowDayIndex = todayDayIndex >= 6 ? 1 : todayDayIndex + 1;
+
+  const activeDayIndex = scheduleTab === 'today' ? todayDayIndex : tomorrowDayIndex;
+  const activeDayName = scheduleTab === 'today' ? 'Today' : 'Tomorrow';
+
+  const displayedClasses = OFFICIAL_WEEKLY_TIMETABLE.filter(
+    c => c.day_of_week === activeDayIndex
+  ).sort((a, b) => a.start_time.localeCompare(b.start_time));
 
   return (
     <div className="space-y-4 pb-24 px-3.5 pt-2 text-white select-none">
@@ -74,7 +107,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
 
-        {/* Liquid Glass Weather & Clock Card */}
+        {/* Real-time Live Weather & Clock Card */}
         <div className="liquid-glass-elevated rounded-3xl p-4 flex items-center justify-between border border-white/10 shadow-2xl">
           <div>
             <div className="text-3xl font-black tracking-tight text-white font-mono flex items-baseline gap-1">
@@ -86,12 +119,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
 
           <div className="text-right flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.25)]">
-              <Sun className="w-6 h-6 animate-spin-slow" />
+            <div className="w-11 h-11 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-300 text-xl shadow-[0_0_20px_rgba(245,158,11,0.25)]">
+              <span>{weather?.icon || '☀️'}</span>
             </div>
             <div>
-              <div className="text-lg font-bold text-white leading-tight">24°C</div>
-              <span className="text-[11px] text-slate-400">Sunny</span>
+              <div className="text-lg font-bold text-white leading-tight">
+                {weather?.temperature ? `${weather.temperature}°C` : '28°C'}
+              </div>
+              <span className="text-[11px] text-slate-400 font-medium">
+                {weather?.condition || 'Clear Sky'}
+              </span>
+              <div className="flex items-center gap-2 text-[9px] text-slate-400 mt-0.5">
+                <span className="flex items-center gap-0.5"><Droplets className="w-2.5 h-2.5 text-sky-400" /> {weather?.humidity || 62}%</span>
+                <span className="flex items-center gap-0.5"><Wind className="w-2.5 h-2.5 text-slate-400" /> {weather?.windSpeed || 8} km/h</span>
+              </div>
             </div>
           </div>
         </div>
@@ -110,14 +151,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
 
         <div className="space-y-1.5 text-xs leading-relaxed text-slate-200">
-          <p>• Today's first class: <strong className="text-white">Corporate & Business Law at 09:30 AM</strong> (Room 304).</p>
           <p>
-            • Overall attendance is <strong className="text-amber-400">{overall.percentage}%</strong> ({overall.totalPresent}/{overall.totalLectures} Lectures).
+            • Overall attendance stands at <strong className="text-amber-400">{OFFICIAL_ATTENDANCE_OVERALL.percentage}%</strong> ({OFFICIAL_ATTENDANCE_OVERALL.totalPresent}/{OFFICIAL_ATTENDANCE_OVERALL.totalLectures} Lectures).
           </p>
           <p>
-            • <strong className="text-rose-400">Action required:</strong> Attend all upcoming lectures in <em>Digital Marketing (30.77%)</em> and <em>MS-Excel (55.56%)</em> to recover to 75%.
+            • <strong className="text-sky-300">5-Min Class Alerts:</strong> Julie notifies you 5 minutes before each lecture with room & faculty details.
           </p>
-          <p className="text-slate-300 pt-0.5">• You have <strong className="text-white">1 assignment due tomorrow</strong>.</p>
+          <p>
+            • <strong className="text-rose-400">Recovery focus:</strong> Attend all lectures in <em>Digital Marketing (30.77%)</em> and <em>MS-Excel (55.56%)</em> to reach 75%.
+          </p>
         </div>
 
         <button
@@ -129,186 +171,106 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </button>
       </div>
 
-      {/* Grid: Schedule & Attendance */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        {/* Today's Schedule Card */}
-        <div className="liquid-glass rounded-3xl p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">Today's Schedule</h2>
-            <button onClick={() => onNavigateToTab('schedule')} className="text-xs text-sky-400 font-semibold hover:text-sky-300">
-              See all
-            </button>
+      {/* TODAY / TOMORROW SCHEDULE CARD */}
+      <div className="liquid-glass rounded-3xl p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <Calendar className="w-3.5 h-3.5 text-sky-400" />
+            <h2 className="text-xs font-bold uppercase tracking-wider text-slate-300">
+              Schedule ({activeDayName})
+            </h2>
           </div>
 
-          <div className="space-y-2.5 pt-1">
-            <div className="flex items-start gap-2.5 text-xs">
-              <span className="w-2 h-2 rounded-full bg-purple-500 mt-1 shrink-0 shadow-[0_0_8px_rgba(168,85,247,0.8)]" />
-              <span className="font-mono text-slate-400 text-[11px] w-16 shrink-0">09:30 AM</span>
-              <div>
-                <p className="font-semibold text-white">(P1) Business Law</p>
-                <p className="text-[10px] text-slate-400">Room 304 • Namita</p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-2.5 text-xs">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 mt-1 shrink-0 shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
-              <span className="font-mono text-slate-400 text-[11px] w-16 shrink-0">10:30 AM</span>
-              <div>
-                <p className="font-semibold text-white">(P2) Management Accounting</p>
-                <p className="text-[10px] text-slate-400">Room 304 • Anupam Gupta</p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-2.5 text-xs">
-              <span className="w-2 h-2 rounded-full bg-cyan-500 mt-1 shrink-0 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
-              <span className="font-mono text-slate-400 text-[11px] w-16 shrink-0">11:30 AM</span>
-              <div>
-                <p className="font-semibold text-white">(P3) Tour Package Operations</p>
-                <p className="text-[10px] text-slate-400">Room 304 • Rishika Aggarwal</p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-2.5 text-xs">
-              <span className="w-2 h-2 rounded-full bg-rose-500 mt-1 shrink-0 shadow-[0_0_8px_rgba(244,63,94,0.8)]" />
-              <span className="font-mono text-slate-400 text-[11px] w-16 shrink-0">01:30 PM</span>
-              <div>
-                <p className="font-semibold text-white">(P5) Office Management</p>
-                <p className="text-[10px] text-slate-400">Room 304 • Swati Tiwari</p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-2.5 text-xs">
-              <span className="w-2 h-2 rounded-full bg-sky-500 mt-1 shrink-0 shadow-[0_0_8px_rgba(56,189,248,0.8)]" />
-              <span className="font-mono text-slate-400 text-[11px] w-16 shrink-0">02:30 PM</span>
-              <div>
-                <p className="font-semibold text-white">(P6) Digital Marketing</p>
-                <p className="text-[10px] text-slate-400">Room 304 • Mohd Amir</p>
-              </div>
-            </div>
+          {/* Today / Tomorrow Toggle Pills */}
+          <div className="flex items-center bg-white/5 rounded-full p-0.5 border border-white/10">
+            <button
+              onClick={() => setScheduleTab('today')}
+              className={`px-3 py-1 rounded-full text-[10px] font-bold transition-all ${
+                scheduleTab === 'today'
+                  ? 'bg-gradient-to-r from-julie-600 to-sky-500 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Today
+            </button>
+            <button
+              onClick={() => setScheduleTab('tomorrow')}
+              className={`px-3 py-1 rounded-full text-[10px] font-bold transition-all ${
+                scheduleTab === 'tomorrow'
+                  ? 'bg-gradient-to-r from-julie-600 to-sky-500 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Tomorrow
+            </button>
           </div>
         </div>
 
-        {/* Attendance Card with Circular Ring */}
-        <div className="liquid-glass rounded-3xl p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">Attendance</h2>
-            <button onClick={() => onNavigateToTab('attendance')} className="text-xs text-sky-400 font-semibold hover:text-sky-300">
-              See all
-            </button>
-          </div>
+        {/* Classes List */}
+        <div className="space-y-2 pt-1">
+          {displayedClasses.length === 0 ? (
+            <p className="text-xs text-slate-400 py-3 text-center">No scheduled lectures for this day.</p>
+          ) : (
+            displayedClasses.map(cls => (
+              <div
+                key={cls.id}
+                className="flex items-center justify-between p-3 rounded-2xl bg-white/[0.03] border border-white/5 hover:border-white/15 transition-all"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-300 flex items-center justify-center font-mono font-bold text-xs">
+                    {cls.start_time.slice(0, 5)}
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-bold text-white">{cls.subject_name}</h3>
+                    <p className="text-[10px] text-slate-400">
+                      {cls.faculty_name} • Room {cls.room_number || '304'}
+                    </p>
+                  </div>
+                </div>
 
-          <div className="flex items-center justify-between px-2 py-1">
-            <div>
-              <p className="text-xs font-semibold text-slate-400">Overall (08/07 - 19/08)</p>
-              <p className="text-xs font-bold text-amber-400 mt-0.5 flex items-center gap-1">
-                <AlertTriangle className="w-3 h-3" /> Shortage (Min 75% req)
-              </p>
-            </div>
-
-            {/* Circular Progress Gauge */}
-            <div className="relative w-16 h-16 flex items-center justify-center">
-              <svg className="w-16 h-16 transform -rotate-90">
-                <circle cx="32" cy="32" r="26" stroke="currentColor" strokeWidth="5" className="text-white/10" fill="transparent" />
-                <circle
-                  cx="32"
-                  cy="32"
-                  r="26"
-                  stroke="currentColor"
-                  strokeWidth="5"
-                  className="text-amber-400"
-                  fill="transparent"
-                  strokeDasharray="163"
-                  strokeDashoffset={163 - (163 * overall.percentage) / 100}
-                  strokeLinecap="round"
-                />
-              </svg>
-              <span className="absolute text-xs font-black text-white font-mono">{overall.percentage}%</span>
-            </div>
-          </div>
-
-          <div className="space-y-1 text-xs text-slate-300 pt-1 divide-y divide-white/5">
-            {OFFICIAL_SUBJECT_ATTENDANCE.slice(0, 5).map(s => (
-              <div key={s.code} className="flex justify-between py-1">
-                <span className="truncate pr-2">{s.name}</span>
-                <span className={`font-semibold font-mono ${s.percentage < 75 ? 'text-amber-400' : 'text-emerald-400'}`}>
-                  {s.percentage.toFixed(1)}%
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/5 text-sky-400 border border-white/10">
+                  {cls.subject_code}
                 </span>
               </div>
-            ))}
-          </div>
+            ))
+          )}
         </div>
-      </div>
 
-      {/* Grid: Upcoming Task & Exams */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {/* Upcoming Task */}
-        <div
-          onClick={() => onNavigateToTab('tasks')}
-          className="liquid-glass rounded-3xl p-4 space-y-2 cursor-pointer hover:border-sky-400/40 transition-all"
+        <button
+          onClick={() => onNavigateToTab('schedule')}
+          className="w-full py-2 rounded-xl text-center text-xs font-semibold text-sky-400 hover:text-sky-300 transition-colors"
         >
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Upcoming Task</h3>
-          <div className="flex items-center justify-between pt-1">
-            <div>
-              <p className="text-xs font-bold text-white">Digital Marketing Strategy</p>
-              <p className="text-[10px] text-slate-400 mt-0.5">Due tomorrow, 11:59 PM</p>
-            </div>
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30">
-              High
-            </span>
-          </div>
-        </div>
-
-        {/* Exams Countdown */}
-        <div className="liquid-glass rounded-3xl p-4 space-y-2">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Exams</h3>
-          <div className="flex items-center justify-between pt-1">
-            <div>
-              <p className="text-xs font-bold text-white">Corporate & Business Law</p>
-              <p className="text-[10px] text-slate-400 mt-0.5">30 August 2026</p>
-            </div>
-            <div className="text-right">
-              <span className="text-xl font-black text-white font-mono">11</span>
-              <span className="text-[10px] text-slate-400 block -mt-1">Days Left</span>
-            </div>
-          </div>
-        </div>
+          View Full Weekly Timetable &rarr;
+        </button>
       </div>
 
-      {/* Bottom Quick Action Bar */}
-      <div className="pt-2">
-        <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 px-1 mb-2">Quick Actions</p>
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
-          <button
-            onClick={() => onNavigateToTab('tasks')}
-            className="px-3.5 py-2 rounded-2xl liquid-pill text-xs font-semibold text-slate-200 hover:text-white flex items-center gap-1.5 whitespace-nowrap active:scale-95"
-          >
-            <Plus className="w-3.5 h-3.5 text-sky-400" /> New Task
-          </button>
-          <button
-            onClick={onOpenVoice}
-            className="px-3.5 py-2 rounded-2xl liquid-glass-button text-xs font-semibold text-white flex items-center gap-1.5 whitespace-nowrap shadow-glass-button active:scale-95"
-          >
-            <Mic className="w-3.5 h-3.5" /> Talk to Julie
-          </button>
-          <button
-            onClick={() => onNavigateToTab('chat')}
-            className="px-3.5 py-2 rounded-2xl liquid-pill text-xs font-semibold text-slate-200 hover:text-white flex items-center gap-1.5 whitespace-nowrap active:scale-95"
-          >
-            <Upload className="w-3.5 h-3.5 text-sky-400" /> Upload File
-          </button>
-          <button
-            onClick={() => onNavigateToTab('schedule')}
-            className="px-3.5 py-2 rounded-2xl liquid-pill text-xs font-semibold text-slate-200 hover:text-white flex items-center gap-1.5 whitespace-nowrap active:scale-95"
-          >
-            <Calendar className="w-3.5 h-3.5 text-sky-400" /> Schedule
-          </button>
-          <button
-            onClick={() => onNavigateToTab('tasks')}
-            className="px-3.5 py-2 rounded-2xl liquid-pill text-xs font-semibold text-slate-200 hover:text-white flex items-center gap-1.5 whitespace-nowrap active:scale-95"
-          >
-            <CheckSquare className="w-3.5 h-3.5 text-sky-400" /> View Tasks
-          </button>
-        </div>
+      {/* Quick Action Grid */}
+      <div className="grid grid-cols-2 gap-3 pt-1">
+        <button
+          onClick={() => onNavigateToTab('attendance')}
+          className="liquid-glass p-3.5 rounded-3xl flex items-center gap-3 hover:border-sky-400/30 transition-all text-left"
+        >
+          <div className="w-9 h-9 rounded-2xl bg-sky-500/10 border border-sky-500/20 text-sky-400 flex items-center justify-center">
+            <GraduationCap className="w-4 h-4" />
+          </div>
+          <div>
+            <p className="text-xs font-bold text-white">60.34% Attendance</p>
+            <p className="text-[10px] text-slate-400">Mark present / missed</p>
+          </div>
+        </button>
+
+        <button
+          onClick={() => onNavigateToTab('notifications')}
+          className="liquid-glass p-3.5 rounded-3xl flex items-center gap-3 hover:border-purple-400/30 transition-all text-left"
+        >
+          <div className="w-9 h-9 rounded-2xl bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center">
+            <Sparkles className="w-4 h-4" />
+          </div>
+          <div>
+            <p className="text-xs font-bold text-white">Class Reminders</p>
+            <p className="text-[10px] text-slate-400">5-min prior alerts</p>
+          </div>
+        </button>
       </div>
     </div>
   );

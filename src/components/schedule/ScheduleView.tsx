@@ -1,18 +1,25 @@
 // =============================================================================
 // PROJECT JULIE — OFFICIAL SCHEDULE VIEW
-// Directly connected to Uttaranchal University (UU-ERP / Cyborg-ERP) Timetable
+// Today / Tomorrow / Full Week Uttaranchal University (UU-ERP) Timetable
 // =============================================================================
 
 import React, { useState } from 'react';
-import { ArrowLeft, Calendar, MapPin, User, Clock, CheckCircle2, Sparkles } from 'lucide-react';
+import { ArrowLeft, Calendar, MapPin, User, Clock, CheckCircle2, Sparkles, Check, X } from 'lucide-react';
 import { OFFICIAL_WEEKLY_TIMETABLE } from '@/core/data/userTimetable';
+import { AttendanceEngine } from '@/services/attendance/AttendanceEngine';
 
 interface ScheduleViewProps {
   onBack?: () => void;
 }
 
 export const ScheduleView: React.FC<ScheduleViewProps> = ({ onBack }) => {
-  const [selectedDayIndex, setSelectedDayIndex] = useState(1); // 1 = Mon, 2 = Tue, etc.
+  const now = new Date();
+  const currentDay = now.getDay(); // 0 = Sun, 1 = Mon, ..., 3 = Wed, 4 = Thu
+  const todayDayIndex = currentDay === 0 ? 1 : Math.min(6, currentDay);
+  const tomorrowDayIndex = todayDayIndex >= 6 ? 1 : todayDayIndex + 1;
+
+  const [selectedDayIndex, setSelectedDayIndex] = useState(todayDayIndex);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
 
   const days = [
     { name: 'Mon', dayIndex: 1, full: 'Monday' },
@@ -26,6 +33,14 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ onBack }) => {
   const currentClasses = OFFICIAL_WEEKLY_TIMETABLE.filter(
     c => c.day_of_week === selectedDayIndex
   ).sort((a, b) => a.start_time.localeCompare(b.start_time));
+
+  const handleMarkAttendance = async (subjectCode: string, status: 'attended' | 'missed') => {
+    const res = await AttendanceEngine.markClassAttendance(subjectCode, status, 'User Command');
+    if (res.success) {
+      setActionNotice(res.message);
+      setTimeout(() => setActionNotice(null), 5000);
+    }
+  };
 
   const getPeriodLabel = (startTime: string) => {
     if (startTime.startsWith('09:30')) return '(P1)';
@@ -81,88 +96,129 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ onBack }) => {
         </div>
       </div>
 
+      {/* Dynamic Toast Notice */}
+      {actionNotice && (
+        <div className="p-3 rounded-2xl liquid-glass border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 text-xs flex items-center gap-2 animate-fade-in">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span>{actionNotice}</span>
+        </div>
+      )}
+
+      {/* Quick Today / Tomorrow Preset Pills */}
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => setSelectedDayIndex(todayDayIndex)}
+          className={`flex-1 py-2 rounded-2xl text-xs font-bold transition-all ${
+            selectedDayIndex === todayDayIndex
+              ? 'bg-gradient-to-r from-julie-600 to-sky-500 text-white shadow-md'
+              : 'liquid-pill text-slate-400 hover:text-white'
+          }`}
+        >
+          📍 Today ({days.find(d => d.dayIndex === todayDayIndex)?.name})
+        </button>
+
+        <button
+          onClick={() => setSelectedDayIndex(tomorrowDayIndex)}
+          className={`flex-1 py-2 rounded-2xl text-xs font-bold transition-all ${
+            selectedDayIndex === tomorrowDayIndex
+              ? 'bg-gradient-to-r from-julie-600 to-sky-500 text-white shadow-md'
+              : 'liquid-pill text-slate-400 hover:text-white'
+          }`}
+        >
+          ⚡ Tomorrow ({days.find(d => d.dayIndex === tomorrowDayIndex)?.name})
+        </button>
+      </div>
+
       {/* Weekday Selector Bar */}
       <div className="flex items-center justify-between gap-1 liquid-glass p-1.5 rounded-2xl">
         {days.map(d => {
           const isSelected = selectedDayIndex === d.dayIndex;
+          const isToday = d.dayIndex === todayDayIndex;
 
           return (
             <button
               key={d.dayIndex}
               onClick={() => setSelectedDayIndex(d.dayIndex)}
-              className={`flex-1 py-2.5 rounded-xl text-center transition-all ${
+              className={`flex-1 py-2 rounded-xl text-center transition-all ${
                 isSelected
                   ? 'liquid-glass-button text-white shadow-glass-button font-bold'
                   : 'text-slate-400 hover:text-white hover:bg-white/5'
               }`}
             >
               <span className="block text-[11px] uppercase font-semibold">{d.name}</span>
+              {isToday && <span className="block text-[8px] text-sky-400 font-bold">•</span>}
             </button>
           );
         })}
       </div>
 
-      {/* Selected Day Classes Stream */}
+      {/* Classes List */}
       <div className="space-y-3 pt-1">
         <div className="flex items-center justify-between px-1">
-          <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-            {days.find(d => d.dayIndex === selectedDayIndex)?.full} Lectures
-          </h2>
-          <span className="text-[11px] text-sky-400 font-semibold font-mono">
-            {currentClasses.length} Scheduled
-          </span>
+          <p className="text-xs font-bold text-slate-400">
+            {days.find(d => d.dayIndex === selectedDayIndex)?.full}'s Lectures ({currentClasses.length})
+          </p>
+          <span className="text-[10px] text-sky-400 font-mono">5-Min Pre-Class Alert</span>
         </div>
 
         {currentClasses.length === 0 ? (
-          <div className="liquid-glass rounded-3xl p-6 text-center space-y-2 border border-white/5">
-            <Sparkles className="w-8 h-8 text-sky-400 mx-auto" />
-            <p className="text-xs font-bold text-white">No classes scheduled today</p>
-            <p className="text-[11px] text-slate-400">Time for revision, project work, or rest.</p>
+          <div className="liquid-glass rounded-3xl p-8 text-center text-slate-400 text-xs">
+            No lectures scheduled on this day.
           </div>
         ) : (
-          <div className="space-y-2.5">
-            {currentClasses.map((cls, idx) => {
-              const period = getPeriodLabel(cls.start_time);
-              const dot = getDotColor(cls.subject_code);
-              const formattedTime = `${cls.start_time.slice(0, 5)} - ${cls.end_time.slice(0, 5)}`;
-
-              return (
-                <div
-                  key={cls.id || idx}
-                  className="liquid-glass rounded-3xl p-4 space-y-2 hover:border-sky-400/30 transition-all shadow-md"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2.5">
-                      <span className={`w-2.5 h-2.5 rounded-full ${dot} shrink-0`} />
-                      <div>
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded-full bg-white/10 text-sky-300 font-mono">
-                            {period} {cls.subject_code}
-                          </span>
-                          <span className="text-[10px] text-slate-400 font-mono">{formattedTime}</span>
-                        </div>
-                        <h3 className="text-xs font-bold text-white mt-1 leading-snug">
-                          {cls.subject_name}
-                        </h3>
-                      </div>
+          currentClasses.map((cls, idx) => (
+            <div
+              key={cls.id || idx}
+              className="liquid-glass rounded-3xl p-4 space-y-2.5 shadow-md hover:border-white/20 transition-all"
+            >
+              <div className="flex items-start justify-between">
+                <div className="flex items-start gap-3">
+                  <span className={`w-2.5 h-2.5 rounded-full mt-1.5 shrink-0 ${getDotColor(cls.subject_code)}`} />
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold text-sky-400 font-mono">
+                        {getPeriodLabel(cls.start_time)} {cls.start_time} – {cls.end_time}
+                      </span>
                     </div>
-                  </div>
-
-                  <div className="flex items-center justify-between pt-2 border-t border-white/5 text-[11px] text-slate-400">
-                    <div className="flex items-center gap-1">
-                      <User className="w-3 h-3 text-slate-500" />
-                      <span>{cls.faculty_name || 'Faculty'}</span>
-                    </div>
-
-                    <div className="flex items-center gap-1 text-slate-400">
-                      <MapPin className="w-3 h-3 text-sky-400" />
-                      <span>{cls.room_number || 'Room 304'}</span>
-                    </div>
+                    <h3 className="text-xs font-bold text-white mt-0.5">{cls.subject_name}</h3>
                   </div>
                 </div>
-              );
-            })}
-          </div>
+
+                <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-white/5 text-slate-300 border border-white/10">
+                  {cls.subject_code}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between pt-1 border-t border-white/5 text-[11px] text-slate-400">
+                <div className="flex items-center gap-3">
+                  <span className="flex items-center gap-1">
+                    <User className="w-3 h-3 text-slate-500" />
+                    {cls.faculty_name}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <MapPin className="w-3 h-3 text-slate-500" />
+                    Room {cls.room_number || '304'}
+                  </span>
+                </div>
+
+                {/* Quick 1-Tap Attendance */}
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => handleMarkAttendance(cls.subject_code || '', 'attended')}
+                    className="px-2 py-0.5 rounded-lg bg-emerald-500/20 text-emerald-300 text-[9px] font-bold border border-emerald-500/30 hover:bg-emerald-500/30 transition-colors"
+                  >
+                    + Present
+                  </button>
+                  <button
+                    onClick={() => handleMarkAttendance(cls.subject_code || '', 'missed')}
+                    className="px-2 py-0.5 rounded-lg bg-rose-500/10 text-rose-300 text-[9px] font-bold border border-rose-500/30 hover:bg-rose-500/20 transition-colors"
+                  >
+                    Missed
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))
         )}
       </div>
     </div>

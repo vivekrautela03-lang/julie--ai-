@@ -1,6 +1,6 @@
 // =============================================================================
-// PROJECT JULIE — 10-MINUTE CLASS REMINDER & NOTIFICATION SERVICE
-// Automatically checks the live timetable and triggers class reminders 10 min prior
+// PROJECT JULIE — 5-MINUTE PRE-CLASS REMINDER & NOTIFICATION SERVICE
+// Checks live timetable and triggers "Reach Class Soon" alert 5 min before each class
 // =============================================================================
 
 import { db, CURRENT_USER_ID } from '@/core/storage/db';
@@ -11,7 +11,7 @@ export class ClassReminderService {
   private static notifiedClassIds: Set<string> = new Set();
 
   /**
-   * Starts the 10-minute class reminder scheduler.
+   * Starts the 5-minute pre-class reminder scheduler.
    */
   static start(): void {
     if (this.intervalId) return;
@@ -23,10 +23,10 @@ export class ClassReminderService {
       }
     }
 
-    // Run check immediately and every 30 seconds
+    // Run check immediately and every 15 seconds
     this.checkUpcomingClasses();
-    this.intervalId = setInterval(() => this.checkUpcomingClasses(), 30000);
-    console.log('[Class Reminder Service] 10-minute pre-class reminder engine active.');
+    this.intervalId = setInterval(() => this.checkUpcomingClasses(), 15000);
+    console.log('[Class Reminder Service] 5-minute pre-class reminder engine active.');
   }
 
   static stop(): void {
@@ -37,7 +37,7 @@ export class ClassReminderService {
   }
 
   /**
-   * Checks today's classes from the timetable and notifies 10 minutes prior to start.
+   * Checks today's classes from the timetable and notifies 5 minutes prior to start.
    */
   static async checkUpcomingClasses(): Promise<void> {
     try {
@@ -59,31 +59,31 @@ export class ClassReminderService {
         const classTotalMins = startH * 60 + startM;
         const diffMins = classTotalMins - currentTotalMins;
 
-        // Notification key for today (e.g. 2026-08-19-cls-001)
+        // Notification key for today (e.g. 2026-08-19-cls-001-5min)
         const todayDateStr = now.toISOString().split('T')[0];
-        const notifKey = `${todayDateStr}-${cls.id}`;
+        const notifKey = `${todayDateStr}-${cls.id}-5min`;
 
-        // If class starts in 1 to 10 minutes (or right now) and not notified yet
-        if (diffMins >= 0 && diffMins <= 10 && !this.notifiedClassIds.has(notifKey)) {
+        // If class starts in 1 to 5 minutes (or right now) and not notified yet
+        if (diffMins >= 0 && diffMins <= 5 && !this.notifiedClassIds.has(notifKey)) {
           this.notifiedClassIds.add(notifKey);
 
           const subject = subjects.find(s => s.id === cls.subject_id);
-          const subName = subject?.subject_name || 'Upcoming Class';
+          const subName = subject?.subject_name || 'Upcoming Lecture';
           const subCode = subject?.subject_code || '';
           const room = cls.room_number ? `in Room ${cls.room_number}` : '';
           const faculty = cls.faculty_name ? `with ${cls.faculty_name}` : '';
 
-          const title = `Class in ${diffMins === 0 ? 'a moment' : `${diffMins} min`}: ${subCode || subName}`;
-          const body = `${subName} starts at ${cls.start_time} ${room} ${faculty}. Mark your attendance after class to stay above 75%!`.trim();
+          const title = `⏰ Reach Class Soon! ${subCode || subName} in ${diffMins === 0 ? 'a moment' : `${diffMins} min`}`;
+          const body = `${subName} starts at ${cls.start_time} ${room} ${faculty}. Head to class now and mark attendance after!`.trim();
 
           // 1. Add notification to local database
           const notif: AppNotification = {
-            id: `notif-class-${Date.now()}`,
+            id: `notif-class-5min-${Date.now()}`,
             user_id: CURRENT_USER_ID,
             title,
             body,
             category: 'College',
-            urgency_level: 'High',
+            urgency_level: 'Urgent',
             action_payload: {
               action: 'open_attendance',
             },
@@ -107,7 +107,7 @@ export class ClassReminderService {
             } catch (e) {}
           }
 
-          console.log(`[Class Reminder] Triggered alert for ${subName} (${cls.start_time})`);
+          console.log(`[Class Reminder 5-Min] Triggered alert for ${subName} (${cls.start_time})`);
         }
       }
     } catch (err) {
