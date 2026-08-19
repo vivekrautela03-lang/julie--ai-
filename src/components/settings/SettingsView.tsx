@@ -1,6 +1,6 @@
 // =============================================================================
 // PROJECT JULIE — SETTINGS VIEW (LIQUID GLASS THEME)
-// Personality, voice, proactivity, Firebase, connected integrations & Theme Switcher.
+// Personality, female voice personas, proactivity, Firebase & Theme Switcher.
 // =============================================================================
 
 import React, { useState } from 'react';
@@ -19,6 +19,8 @@ import {
 } from 'lucide-react';
 import { ConnectedAppsModal } from '@/components/integrations/ConnectedAppsModal';
 import { FirebaseAuthModal } from '@/components/auth/FirebaseAuthModal';
+import { VoicePersonaModal } from '@/components/settings/VoicePersonaModal';
+import { voiceService } from '@/services/voice/VoiceService';
 
 interface SettingsViewProps {
   onBack?: () => void;
@@ -27,22 +29,26 @@ interface SettingsViewProps {
 export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
   const [isConnectedAppsOpen, setIsConnectedAppsOpen] = useState(false);
   const [isFirebaseAuthOpen, setIsFirebaseAuthOpen] = useState(false);
+  const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
 
   const currentTheme = (localStorage.getItem('julie_theme') as 'dark' | 'light') || 'dark';
+  const activeVoice = voiceService.getPersona();
 
   const settingsItems = [
+    { id: 'assistant', label: `Assistant Voice (${activeVoice.name.split(' ')[0]})`, icon: Sparkles, badge: activeVoice.accent },
+    { id: 'voice', label: 'Voice & Speech Engine Options', icon: Mic, badge: '5 Personas' },
     { id: 'firebase_auth', label: 'Firebase Account & Project (julie-7a188)', icon: Shield, badge: 'Firebase' },
     { id: 'apps', label: 'Connected Apps & UU-ERP Data Sync', icon: Grid, badge: 'Live' },
-    { id: 'assistant', label: 'Assistant Persona (Boss Lady)', icon: Sparkles, badge: 'Configured' },
     { id: 'appearance', label: `Theme (${currentTheme === 'dark' ? 'Dark Mode' : 'Light Mode'})`, icon: currentTheme === 'dark' ? Moon : Sun, badge: currentTheme === 'dark' ? '🌙 Dark' : '☀️ Light' },
-    { id: 'notifications', label: 'Notifications & Wake Word', icon: Bell, badge: 'Active' },
-    { id: 'voice', label: 'Voice & Speech Engine', icon: Mic },
+    { id: 'notifications', label: 'Notifications & Wake Word', icon: Bell, badge: '5-Min Alerts' },
     { id: 'privacy', label: 'Privacy & Supabase Data Export', icon: Shield },
     { id: 'about', label: 'About Julie AI', icon: Info },
   ];
 
   const handleItemClick = (id: string) => {
-    if (id === 'firebase_auth' || id === 'notifications') {
+    if (id === 'assistant' || id === 'voice') {
+      setIsVoiceModalOpen(true);
+    } else if (id === 'firebase_auth' || id === 'notifications') {
       setIsFirebaseAuthOpen(true);
     } else if (id === 'apps' || id === 'privacy') {
       setIsConnectedAppsOpen(true);
@@ -51,7 +57,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
       localStorage.setItem('julie_theme', newTheme);
       window.location.reload();
     } else if (id === 'about') {
-      alert('Julie AI v2.0 - Premium Glass Personal AI Assistant\nConnected to Gemini API, Firebase julie-7a188 & Supabase');
+      alert('Julie AI v2.0 - Universal Personal AI Assistant\nConnected to Gemini API (All-Domain Knowledge), Firebase julie-7a188 & Supabase');
     }
   };
 
@@ -104,13 +110,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
         })}
       </div>
 
-      {/* Connected Apps Modal */}
+      {/* Modals */}
+      <VoicePersonaModal
+        isOpen={isVoiceModalOpen}
+        onClose={() => setIsVoiceModalOpen(false)}
+      />
       <ConnectedAppsModal
         isOpen={isConnectedAppsOpen}
         onClose={() => setIsConnectedAppsOpen(false)}
       />
-
-      {/* Firebase Auth Modal */}
       <FirebaseAuthModal
         isOpen={isFirebaseAuthOpen}
         onClose={() => setIsFirebaseAuthOpen(false)}
