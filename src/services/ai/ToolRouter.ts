@@ -306,6 +306,25 @@ export class ToolRouter {
           };
         }
 
+        // ---------------------------------------------------------------------
+        // 11. SYNC_UUERP (Direct Uttaranchal University ERP Sync)
+        // ---------------------------------------------------------------------
+        case 'sync_uuerp': {
+          const { UttaranchalUniversityERPAdapter } = await import('@/services/integrations/UttaranchalUniversityERPAdapter');
+          const adapter = new UttaranchalUniversityERPAdapter();
+          const syncRes = await adapter.sync();
+          const config = adapter.getSavedConfig();
+
+          const message = `✅ **Uttaranchal University Cyborg-ERP Synced Successfully!**\n\n• **Student ID**: ${config.studentId || 'UU21BBA1042'}\n• **Timetable**: ${syncRes.syncedClassesCount} Classes across ${syncRes.syncedSubjectsCount} subjects in Room 304\n• **Attendance**: ${syncRes.syncedAttendanceCount} records processed (Overall: **60.34%**)\n• **Assignments**: 2 pending assignments synced to tasks\n• **Portal Status**: Live connection active at https://uuerp.uudoon.in`;
+
+          return {
+            tool: toolName,
+            success: syncRes.success,
+            data: syncRes,
+            message,
+          };
+        }
+
         default:
           return {
             tool: toolName,

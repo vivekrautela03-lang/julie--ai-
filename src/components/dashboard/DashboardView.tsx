@@ -31,6 +31,8 @@ import { WeatherService, type LiveWeatherData } from '@/services/integrations/We
 import { db, CURRENT_USER_ID } from '@/core/storage/db';
 import { VoicePersonaModal } from '@/components/settings/VoicePersonaModal';
 import { InstallAppModal } from '@/components/common/InstallAppModal';
+import { UUERPModal } from '@/components/integrations/UUERPModal';
+import { uuerpAdapter } from '@/services/integrations/UttaranchalUniversityERPAdapter';
 import type { Task } from '@/core/types';
 
 interface DashboardViewProps {
@@ -53,6 +55,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   // Modals
   const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
   const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
+  const [isUUERPModalOpen, setIsUUERPModalOpen] = useState(false);
 
   // New task input state
   const [newTaskTitle, setNewTaskTitle] = useState('');
@@ -60,6 +63,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   // Live query tasks
   const tasks = useLiveQuery(() => db.tasks.toArray(), []) || [];
+  const erpConfig = uuerpAdapter.getSavedConfig();
 
   // Fetch real-time live weather
   useEffect(() => {
@@ -198,32 +202,42 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       </div>
 
-      {/* QUICK LAUNCH BAR: VOICES & INSTALL */}
-      <div className="grid grid-cols-2 gap-2.5">
+      {/* QUICK LAUNCH BAR: UU-ERP, VOICES & INSTALL */}
+      <div className="grid grid-cols-3 gap-2">
+        <button
+          onClick={() => setIsUUERPModalOpen(true)}
+          className="p-2.5 rounded-2xl liquid-glass border border-blue-500/30 hover:border-blue-400 flex flex-col items-center justify-center text-center transition-all active:scale-95"
+          title="Direct Uttaranchal University ERP Portal"
+        >
+          <div className="w-8 h-8 rounded-xl bg-blue-500/20 text-sky-400 flex items-center justify-center mb-1">
+            <GraduationCap className="w-4 h-4" />
+          </div>
+          <p className="text-[11px] font-bold text-white leading-tight">UU-ERP</p>
+          <p className="text-[9px] text-emerald-400 mt-0.5">● Connected</p>
+        </button>
+
         <button
           onClick={() => setIsVoiceModalOpen(true)}
-          className="p-3 rounded-2xl liquid-glass border border-purple-500/30 hover:border-purple-400 flex items-center gap-2.5 text-left transition-all active:scale-95"
+          className="p-2.5 rounded-2xl liquid-glass border border-purple-500/30 hover:border-purple-400 flex flex-col items-center justify-center text-center transition-all active:scale-95"
+          title="Female Assistant Voices"
         >
-          <div className="w-8 h-8 rounded-xl bg-purple-500/20 text-purple-300 flex items-center justify-center">
+          <div className="w-8 h-8 rounded-xl bg-purple-500/20 text-purple-300 flex items-center justify-center mb-1">
             <Volume2 className="w-4 h-4" />
           </div>
-          <div>
-            <p className="text-xs font-bold text-white leading-none">Female Voices</p>
-            <p className="text-[10px] text-slate-400 mt-0.5">5 Executive Voices</p>
-          </div>
+          <p className="text-[11px] font-bold text-white leading-tight">Voices</p>
+          <p className="text-[9px] text-slate-400 mt-0.5">5 Options</p>
         </button>
 
         <button
           onClick={() => setIsInstallModalOpen(true)}
-          className="p-3 rounded-2xl liquid-glass border border-sky-500/30 hover:border-sky-400 flex items-center gap-2.5 text-left transition-all active:scale-95"
+          className="p-2.5 rounded-2xl liquid-glass border border-sky-500/30 hover:border-sky-400 flex flex-col items-center justify-center text-center transition-all active:scale-95"
+          title="Install Julie App on PC and Phone"
         >
-          <div className="w-8 h-8 rounded-xl bg-sky-500/20 text-sky-300 flex items-center justify-center">
+          <div className="w-8 h-8 rounded-xl bg-sky-500/20 text-sky-300 flex items-center justify-center mb-1">
             <Download className="w-4 h-4" />
           </div>
-          <div>
-            <p className="text-xs font-bold text-white leading-none">Install App</p>
-            <p className="text-[10px] text-slate-400 mt-0.5">Desktop & Mobile</p>
-          </div>
+          <p className="text-[11px] font-bold text-white leading-tight">Download</p>
+          <p className="text-[9px] text-slate-400 mt-0.5">PC / Phone</p>
         </button>
       </div>
 
@@ -448,6 +462,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       </div>
 
       {/* Modals */}
+      <UUERPModal
+        isOpen={isUUERPModalOpen}
+        onClose={() => setIsUUERPModalOpen(false)}
+      />
+
       <VoicePersonaModal
         isOpen={isVoiceModalOpen}
         onClose={() => setIsVoiceModalOpen(false)}

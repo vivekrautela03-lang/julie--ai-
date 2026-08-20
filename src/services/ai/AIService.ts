@@ -50,8 +50,22 @@ export class AIService {
     const toolResults: ToolExecutionResult[] = [];
     const qLower = cleanQuery.toLowerCase();
 
-    // Attendance command routing
+    // UU-ERP / uudoonerp Command Routing
     if (
+      qLower.includes('uudoonerp') ||
+      qLower.includes('uuerp') ||
+      qLower.includes('uudoon') ||
+      qLower.includes('sync erp') ||
+      qLower.includes('check my erp') ||
+      qLower.includes('check erp') ||
+      qLower.includes('login to erp') ||
+      qLower.includes('access my erp')
+    ) {
+      const toolRes = await ToolRouter.executeTool('sync_uuerp', {}, source);
+      toolResults.push(toolRes);
+    }
+    // Attendance command routing
+    else if (
       qLower.includes('attended') ||
       qLower.includes('mark my attendance') ||
       qLower.includes('mark attendance') ||
@@ -113,9 +127,9 @@ export class AIService {
     // 5. Build system instruction with live context and Boss Lady persona
     const systemPrompt = PromptManager.getSystemPrompt(context, prefs?.assistant_tone || 'Confident & Proactive');
 
-    // If an attendance tool executed successfully, use its deterministic mathematical result
-    const attendanceTool = toolResults.find(t => t.tool === 'mark_attendance' && t.success);
-    let responseText: string | null = attendanceTool?.message || null;
+    // If an ERP sync or attendance tool executed successfully, use its deterministic mathematical result
+    const executedDirectTool = toolResults.find(t => (t.tool === 'sync_uuerp' || t.tool === 'mark_attendance') && t.success);
+    let responseText: string | null = executedDirectTool?.message || null;
 
     // 6. Query Connected Gemini Model API if no direct deterministic message
     if (!responseText) {

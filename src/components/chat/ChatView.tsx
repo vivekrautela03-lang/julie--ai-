@@ -158,10 +158,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ onOpenVoice, onNavigateToTab
   };
 
   const quickPills = [
+    "Sync my UU-ERP data",
     "What's my schedule tomorrow?",
     "What's my attendance standing?",
     "Live weather in Dehradun",
-    "Mark attendance for today's class",
   ];
 
   return (
