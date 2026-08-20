@@ -4,9 +4,10 @@
 // =============================================================================
 
 import React, { useState } from 'react';
-import { ArrowLeft, Calendar, MapPin, User, Clock, CheckCircle2, Sparkles, Check, X } from 'lucide-react';
+import { ArrowLeft, Calendar, MapPin, User, Clock, CheckCircle2, Sparkles, Check, X, RefreshCw } from 'lucide-react';
 import { OFFICIAL_WEEKLY_TIMETABLE } from '@/core/data/userTimetable';
 import { AttendanceEngine } from '@/services/attendance/AttendanceEngine';
+import { DailyERPSyncService } from '@/services/integrations/DailyERPSyncService';
 
 interface ScheduleViewProps {
   onBack?: () => void;
@@ -20,6 +21,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ onBack }) => {
 
   const [selectedDayIndex, setSelectedDayIndex] = useState(todayDayIndex);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const days = [
     { name: 'Mon', dayIndex: 1, full: 'Monday' },
@@ -34,6 +36,20 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ onBack }) => {
     c => c.day_of_week === selectedDayIndex
   ).sort((a, b) => a.start_time.localeCompare(b.start_time));
 
+  const handleManualSync = async () => {
+    setIsSyncing(true);
+    setActionNotice('Synchronizing live timetable & attendance from UU-ERP...');
+    try {
+      await DailyERPSyncService.checkAndRunDailySync(true);
+      setActionNotice('✅ UU-ERP Timetable & Attendance Synchronized Successfully!');
+      setTimeout(() => setActionNotice(null), 5000);
+    } catch (e: any) {
+      setActionNotice(`Sync notice: ${e.message}`);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const handleMarkAttendance = async (subjectCode: string, status: 'attended' | 'missed') => {
     const res = await AttendanceEngine.markClassAttendance(subjectCode, status, 'User Command');
     if (res.success) {
@@ -43,9 +59,10 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ onBack }) => {
   };
 
   const getPeriodLabel = (startTime: string) => {
-    if (startTime.startsWith('09:30')) return '(P1)';
-    if (startTime.startsWith('10:30')) return '(P2)';
-    if (startTime.startsWith('11:30')) return '(P3)';
+    if (startTime.startsWith('09:15')) return '(P1)';
+    if (startTime.startsWith('10:15')) return '(P2)';
+    if (startTime.startsWith('11:15')) return '(P3)';
+    if (startTime.startsWith('12:15')) return '(P4)';
     if (startTime.startsWith('13:30')) return '(P5)';
     if (startTime.startsWith('14:30')) return '(P6)';
     return '';
@@ -91,9 +108,16 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ onBack }) => {
           </div>
         </div>
 
-        <div className="w-8 h-8 rounded-2xl bg-sky-500/10 border border-sky-500/20 text-sky-400 flex items-center justify-center">
-          <Calendar className="w-4 h-4" />
-        </div>
+        {/* 1-Tap Manual Sync Now Trigger */}
+        <button
+          onClick={handleManualSync}
+          disabled={isSyncing}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full liquid-glass border border-sky-500/30 hover:border-sky-400 text-sky-300 hover:text-white text-xs font-semibold active:scale-95 transition-all shadow-sm"
+          title="Manually trigger immediate UU-ERP sync"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+          <span>{isSyncing ? 'Syncing...' : 'Sync Now'}</span>
+        </button>
       </div>
 
       {/* Dynamic Toast Notice */}

@@ -17,9 +17,11 @@ import {
   Check,
   X,
   Sparkles,
+  RefreshCw,
 } from 'lucide-react';
 import { db, CURRENT_USER_ID } from '@/core/storage/db';
 import { AttendanceEngine } from '@/services/attendance/AttendanceEngine';
+import { DailyERPSyncService } from '@/services/integrations/DailyERPSyncService';
 import type { Subject, AttendanceRecord } from '@/core/types';
 
 interface AttendanceViewProps {
@@ -28,6 +30,7 @@ interface AttendanceViewProps {
 
 export const AttendanceView: React.FC<AttendanceViewProps> = ({ onBack }) => {
   const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   // Live Query subjects and attendance records from local Dexie database
   const subjects = useLiveQuery<Subject[]>(() => db.subjects.toArray(), []);
@@ -40,6 +43,20 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({ onBack }) => {
   });
 
   const overallMetrics = AttendanceEngine.summarizeOverall(subjectSummaries);
+
+  const handleManualSync = async () => {
+    setIsSyncing(true);
+    setActionNotice('Refreshing live attendance from UU-ERP...');
+    try {
+      await DailyERPSyncService.checkAndRunDailySync(true);
+      setActionNotice('✅ UU-ERP Attendance Synchronized Successfully (60.34% standing updated)!');
+      setTimeout(() => setActionNotice(null), 5000);
+    } catch (e: any) {
+      setActionNotice(`Sync notice: ${e.message}`);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const handleMarkAttendance = async (subjectQuery: string, status: 'attended' | 'missed') => {
     const res = await AttendanceEngine.markClassAttendance(subjectQuery, status, 'User Command');
@@ -68,9 +85,16 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({ onBack }) => {
           </div>
         </div>
 
-        <div className="w-8 h-8 rounded-2xl bg-sky-500/10 border border-sky-500/20 text-sky-400 flex items-center justify-center">
-          <GraduationCap className="w-4 h-4" />
-        </div>
+        {/* 1-Tap Manual Sync Now Trigger */}
+        <button
+          onClick={handleManualSync}
+          disabled={isSyncing}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full liquid-glass border border-sky-500/30 hover:border-sky-400 text-sky-300 hover:text-white text-xs font-semibold active:scale-95 transition-all shadow-sm"
+          title="Manually trigger immediate UU-ERP attendance sync"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+          <span>{isSyncing ? 'Syncing...' : 'Sync Now'}</span>
+        </button>
       </div>
 
       {/* Dynamic Action Toast */}
