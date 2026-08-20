@@ -67,6 +67,13 @@ export const App: React.FC = () => {
       })
       .catch(e => console.warn('[App] Class reminder service note:', e));
 
+    // Start Daily 1-Time UU-ERP Autonomous Sync Worker
+    import('@/services/integrations/DailyERPSyncService')
+      .then(({ DailyERPSyncService }) => {
+        DailyERPSyncService.start();
+      })
+      .catch(e => console.warn('[App] Daily ERP sync service note:', e));
+
     // Local continuous mic background Wake-Word ("Hey Julie") listener
     let unsubLocalWakeWord: (() => void) | null = null;
     import('@/services/voice/WakeWordEngine')

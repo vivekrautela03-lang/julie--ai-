@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { uuerpAdapter } from '@/services/integrations/UttaranchalUniversityERPAdapter';
 import { ERPAuthVault, type ERPAuthSession } from '@/services/integrations/ERPAuthVault';
+import { DailyERPSyncService, type DailySyncStatus } from '@/services/integrations/DailyERPSyncService';
 
 interface UUERPModalProps {
   isOpen: boolean;
@@ -31,6 +32,7 @@ interface UUERPModalProps {
 
 export const UUERPModal: React.FC<UUERPModalProps> = ({ isOpen, onClose }) => {
   const [session, setSession] = useState<ERPAuthSession>(() => ERPAuthVault.getSession());
+  const [dailyStatus, setDailyStatus] = useState<DailySyncStatus>(() => DailyERPSyncService.getStatus());
   const [studentId, setStudentId] = useState(session.studentId || 'UU21BBA1042');
   const [password, setPassword] = useState('');
   const [captchaCode, setCaptchaCode] = useState('');
@@ -42,6 +44,7 @@ export const UUERPModal: React.FC<UUERPModalProps> = ({ isOpen, onClose }) => {
     if (isOpen) {
       const current = ERPAuthVault.getSession();
       setSession(current);
+      setDailyStatus(DailyERPSyncService.getStatus());
       setStudentId(current.studentId || 'UU21BBA1042');
       refreshCaptcha();
     }
@@ -73,6 +76,7 @@ export const UUERPModal: React.FC<UUERPModalProps> = ({ isOpen, onClose }) => {
       const result = await uuerpAdapter.login(studentId, password, captchaCode);
       const updatedSession = ERPAuthVault.getSession();
       setSession(updatedSession);
+      setDailyStatus(DailyERPSyncService.getStatus());
       setSyncMsg({
         type: 'success',
         text: `✅ Connected & Synced! Julie AI is now managing ${result.syncedClassesCount} timetable lectures in Room 304, 7 subject attendance records (60.34%), assignments, and exams.`,
@@ -91,12 +95,13 @@ export const UUERPModal: React.FC<UUERPModalProps> = ({ isOpen, onClose }) => {
     setSyncMsg({ type: 'info', text: 'Retrieving live timetable, attendance & assignments...' });
 
     try {
-      const result = await uuerpAdapter.sync();
+      await DailyERPSyncService.checkAndRunDailySync(true);
       const updatedSession = ERPAuthVault.getSession();
       setSession(updatedSession);
+      setDailyStatus(DailyERPSyncService.getStatus());
       setSyncMsg({
         type: 'success',
-        text: `✅ Background Sync Complete! Updated ${result.syncedClassesCount} classes and ${result.syncedAttendanceCount} attendance records at ${updatedSession.lastSyncedAt}.`,
+        text: `✅ Daily 1-Time Sync Completed! Timetable & Attendance updated for today (${updatedSession.lastSyncedAt}).`,
       });
     } catch (err: any) {
       setSyncMsg({ type: 'error', text: `Sync failed: ${err.message}` });
@@ -109,6 +114,7 @@ export const UUERPModal: React.FC<UUERPModalProps> = ({ isOpen, onClose }) => {
     uuerpAdapter.logout();
     const updated = ERPAuthVault.getSession();
     setSession(updated);
+    setDailyStatus(DailyERPSyncService.getStatus());
     setSyncMsg({ type: 'info', text: 'Disconnected ERP session. Local credentials purged.' });
   };
 
@@ -149,11 +155,11 @@ export const UUERPModal: React.FC<UUERPModalProps> = ({ isOpen, onClose }) => {
           </button>
         </div>
 
-        {/* Official Portal Banner */}
-        <div className="liquid-glass rounded-2xl p-3 flex items-center justify-between gap-2 border border-sky-500/20 bg-sky-500/5">
+        {/* Direct Portal Quick Launch Button */}
+        <div className="p-3.5 rounded-2xl bg-gradient-to-r from-blue-900/30 to-sky-900/20 border border-sky-500/30 flex items-center justify-between gap-3">
           <div className="overflow-hidden">
-            <span className="text-[9px] font-bold text-sky-400 block uppercase tracking-wider">
-              Connected Official Endpoint
+            <span className="text-[10px] font-extrabold text-sky-300 uppercase tracking-wider block">
+              Official ERP Portal
             </span>
             <p className="text-xs font-mono text-slate-300 truncate mt-0.5">https://uuerp.uudoon.in/Account/Login_UU</p>
           </div>
@@ -162,11 +168,45 @@ export const UUERPModal: React.FC<UUERPModalProps> = ({ isOpen, onClose }) => {
             href="https://uuerp.uudoon.in/Account/Login_UU"
             target="_blank"
             rel="noopener noreferrer"
-            className="p-2 rounded-xl liquid-glass text-sky-400 hover:text-white shrink-0 transition-colors"
-            title="Open official portal"
+            className="px-3 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs shrink-0 flex items-center gap-1.5 transition-all shadow-md active:scale-95"
+            title="Open official Uttaranchal University login portal"
           >
-            <ExternalLink className="w-4 h-4" />
+            <span>Open Login Page</span>
+            <ExternalLink className="w-3.5 h-3.5" />
           </a>
+        </div>
+
+        {/* Daily 1-Time Auto-Sync Status Card */}
+        <div className="liquid-glass rounded-2xl p-3 space-y-1.5 border border-white/10 bg-white/[0.02]">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+              <Clock className="w-3 h-3 text-sky-400" /> Daily Auto-Sync Policy
+            </span>
+            <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+              1x / Day
+            </span>
+          </div>
+
+          <div className="flex items-center justify-between pt-1">
+            <div>
+              <p className="text-[11px] text-slate-300 font-medium">
+                {dailyStatus.isSyncedToday ? '● Synced Today' : '⚠️ Pending Today\'s Sync'}
+              </p>
+              <p className="text-[10px] text-slate-400">
+                Last: {dailyStatus.lastSyncTime || 'Today'} • Next: {dailyStatus.nextScheduledSync}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleSyncNow}
+              disabled={isSyncing}
+              className="px-3 py-1.5 rounded-xl liquid-glass text-xs font-semibold text-sky-300 hover:text-white flex items-center gap-1 transition-colors border border-sky-400/20"
+            >
+              <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin' : ''}`} />
+              <span>Sync Now</span>
+            </button>
+          </div>
         </div>
 
         {/* Live Synchronized Academic Status Cards */}
