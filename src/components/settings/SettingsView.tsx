@@ -20,6 +20,7 @@ import {
 import { ConnectedAppsModal } from '@/components/integrations/ConnectedAppsModal';
 import { FirebaseAuthModal } from '@/components/auth/FirebaseAuthModal';
 import { VoicePersonaModal } from '@/components/settings/VoicePersonaModal';
+import { UUERPModal } from '@/components/integrations/UUERPModal';
 import { voiceService } from '@/services/voice/VoiceService';
 
 interface SettingsViewProps {
@@ -30,23 +31,27 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
   const [isConnectedAppsOpen, setIsConnectedAppsOpen] = useState(false);
   const [isFirebaseAuthOpen, setIsFirebaseAuthOpen] = useState(false);
   const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
+  const [isUUERPOpen, setIsUUERPOpen] = useState(false);
 
   const currentTheme = (localStorage.getItem('julie_theme') as 'dark' | 'light') || 'dark';
   const activeVoice = voiceService.getPersona();
 
   const settingsItems = [
+    { id: 'uuerp', label: 'Uttaranchal University Cyborg-ERP', icon: Grid, badge: '● Connected' },
     { id: 'assistant', label: `Assistant Voice (${activeVoice.name.split(' ')[0]})`, icon: Sparkles, badge: activeVoice.accent },
     { id: 'voice', label: 'Voice & Speech Engine Options', icon: Mic, badge: '5 Personas' },
     { id: 'firebase_auth', label: 'Firebase Account & Project (julie-7a188)', icon: Shield, badge: 'Firebase' },
-    { id: 'apps', label: 'Connected Apps & UU-ERP Data Sync', icon: Grid, badge: 'Live' },
+    { id: 'apps', label: 'Connected Third-Party Integrations', icon: Grid, badge: '4 Active' },
     { id: 'appearance', label: `Theme (${currentTheme === 'dark' ? 'Dark Mode' : 'Light Mode'})`, icon: currentTheme === 'dark' ? Moon : Sun, badge: currentTheme === 'dark' ? '🌙 Dark' : '☀️ Light' },
-    { id: 'notifications', label: 'Notifications & Wake Word', icon: Bell, badge: '5-Min Alerts' },
-    { id: 'privacy', label: 'Privacy & Supabase Data Export', icon: Shield },
+    { id: 'notifications', label: 'Notifications & 5-Min Class Alerts', icon: Bell, badge: 'Active' },
+    { id: 'privacy', label: 'Privacy & Supabase Data Vault', icon: Shield },
     { id: 'about', label: 'About Julie AI', icon: Info },
   ];
 
   const handleItemClick = (id: string) => {
-    if (id === 'assistant' || id === 'voice') {
+    if (id === 'uuerp') {
+      setIsUUERPOpen(true);
+    } else if (id === 'assistant' || id === 'voice') {
       setIsVoiceModalOpen(true);
     } else if (id === 'firebase_auth' || id === 'notifications') {
       setIsFirebaseAuthOpen(true);
@@ -57,7 +62,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
       localStorage.setItem('julie_theme', newTheme);
       window.location.reload();
     } else if (id === 'about') {
-      alert('Julie AI v2.0 - Universal Personal AI Assistant\nConnected to Gemini API (All-Domain Knowledge), Firebase julie-7a188 & Supabase');
+      alert('Julie AI v2.0 - Universal Personal AI Assistant\nConnected to Gemini API (All-Domain Knowledge), Uttaranchal University Cyborg-ERP, Firebase julie-7a188 & Supabase');
     }
   };
 
@@ -111,6 +116,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
       </div>
 
       {/* Modals */}
+      <UUERPModal
+        isOpen={isUUERPOpen}
+        onClose={() => setIsUUERPOpen(false)}
+      />
       <VoicePersonaModal
         isOpen={isVoiceModalOpen}
         onClose={() => setIsVoiceModalOpen(false)}

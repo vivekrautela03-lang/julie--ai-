@@ -50,21 +50,40 @@ export class AIService {
     const toolResults: ToolExecutionResult[] = [];
     const qLower = cleanQuery.toLowerCase();
 
-    // UU-ERP / uudoonerp Command Routing
+    // 1. UU-ERP / uudoonerp Synchronization Routing
     if (
       qLower.includes('uudoonerp') ||
       qLower.includes('uuerp') ||
       qLower.includes('uudoon') ||
-      qLower.includes('sync erp') ||
       qLower.includes('check my erp') ||
       qLower.includes('check erp') ||
-      qLower.includes('login to erp') ||
+      qLower.includes('sync erp') ||
+      qLower.includes('sync my college') ||
       qLower.includes('access my erp')
     ) {
-      const toolRes = await ToolRouter.executeTool('sync_uuerp', {}, source);
+      const toolRes = await ToolRouter.executeTool('sync_erp', {}, source);
       toolResults.push(toolRes);
     }
-    // Attendance command routing
+    // 2. Specific Subject Attendance (e.g. "attendance in marketing", "can I miss marketing")
+    else if (
+      (qLower.includes('attendance in') || qLower.includes('can i miss')) &&
+      (qLower.includes('marketing') || qLower.includes('law') || qLower.includes('accounting') || qLower.includes('economics') || qLower.includes('excel') || qLower.includes('environment'))
+    ) {
+      const toolRes = await ToolRouter.executeTool('get_subject_attendance', { subject: cleanQuery }, source);
+      toolResults.push(toolRes);
+    }
+    // 3. Overall Attendance standing (e.g. "what's my attendance", "check my attendance")
+    else if (
+      (qLower.includes('what') || qLower.includes('check') || qLower.includes('show') || qLower.includes('how is')) &&
+      qLower.includes('attendance') &&
+      !qLower.includes('mark') &&
+      !qLower.includes('attended') &&
+      !qLower.includes('present')
+    ) {
+      const toolRes = await ToolRouter.executeTool('get_attendance', {}, source);
+      toolResults.push(toolRes);
+    }
+    // 4. Mark attendance for attended/missed class
     else if (
       qLower.includes('attended') ||
       qLower.includes('mark my attendance') ||
@@ -80,7 +99,57 @@ export class AIService {
       );
       toolResults.push(toolRes);
     }
-    // Intention capture
+    // 5. Timetable queries (e.g. "what classes do I have tomorrow", "what do I have tomorrow", "show timetable")
+    else if (
+      (qLower.includes('classes') || qLower.includes('class') || qLower.includes('timetable') || qLower.includes('schedule') || qLower.includes('what do i have')) &&
+      (qLower.includes('tomorrow') || qLower.includes('today') || qLower.includes('monday') || qLower.includes('tuesday') || qLower.includes('wednesday') || qLower.includes('thursday') || qLower.includes('friday') || qLower.includes('saturday'))
+    ) {
+      const now = new Date();
+      let dayIndex = now.getDay();
+      if (qLower.includes('tomorrow')) dayIndex = dayIndex >= 6 ? 1 : dayIndex + 1;
+      else if (qLower.includes('monday')) dayIndex = 1;
+      else if (qLower.includes('tuesday')) dayIndex = 2;
+      else if (qLower.includes('wednesday')) dayIndex = 3;
+      else if (qLower.includes('thursday')) dayIndex = 4;
+      else if (qLower.includes('friday')) dayIndex = 5;
+      else if (qLower.includes('saturday')) dayIndex = 6;
+
+      const toolRes = await ToolRouter.executeTool('get_timetable', { dayOfWeek: dayIndex }, source);
+      toolResults.push(toolRes);
+    }
+    // 6. Assignment queries (e.g. "what assignments are due", "do I have any assignments due", "what do I need to complete this week")
+    else if (
+      qLower.includes('assignment') ||
+      qLower.includes('assignments') ||
+      qLower.includes('homework') ||
+      (qLower.includes('complete') && qLower.includes('this week'))
+    ) {
+      const toolRes = await ToolRouter.executeTool('get_upcoming_assignments', {}, source);
+      toolResults.push(toolRes);
+    }
+    // 7. Exam queries (e.g. "show me my upcoming exams", "when are my exams", "datesheet")
+    else if (
+      qLower.includes('exam') ||
+      qLower.includes('exams') ||
+      qLower.includes('datesheet') ||
+      qLower.includes('mid-term') ||
+      qLower.includes('midterm')
+    ) {
+      const toolRes = await ToolRouter.executeTool('get_exam_schedule', {}, source);
+      toolResults.push(toolRes);
+    }
+    // 8. Notices queries (e.g. "any new notices", "show college notices", "circulars")
+    else if (
+      qLower.includes('notice') ||
+      qLower.includes('notices') ||
+      qLower.includes('circular') ||
+      qLower.includes('circulars') ||
+      qLower.includes('announcement')
+    ) {
+      const toolRes = await ToolRouter.executeTool('get_notices', {}, source);
+      toolResults.push(toolRes);
+    }
+    // 9. Intention capture
     else if (
       qLower.includes('want to') ||
       qLower.includes('thinking of') ||
@@ -98,13 +167,13 @@ export class AIService {
       );
       toolResults.push(toolRes);
     }
-    // Task creation
+    // 10. Task creation
     else if (qLower.includes('add task') || qLower.includes('create task') || qLower.includes('add assignment')) {
       const title = cleanQuery.replace(/^(add task|create task|add assignment)/i, '').trim() || 'New Task';
       const toolRes = await ToolRouter.executeTool('create_task', { title, priority: 'High', category: 'College' }, source);
       toolResults.push(toolRes);
     }
-    // Task completion
+    // 11. Task completion
     else if (qLower.includes('complete task') || qLower.includes('done with')) {
       const tasks = await db.tasks.toArray();
       const matched = tasks.find(t => cleanQuery.toLowerCase().includes(t.title.toLowerCase()));
@@ -113,7 +182,7 @@ export class AIService {
         toolResults.push(toolRes);
       }
     }
-    // Memory storage
+    // 12. Memory storage
     else if (qLower.includes('remember that') || qLower.includes('keep in mind')) {
       const content = cleanQuery.replace(/^(remember that|keep in mind)/i, '').trim();
       const toolRes = await ToolRouter.executeTool('save_memory', { content, memory_type: 'explicit', category: 'Goals' }, source);
@@ -127,8 +196,8 @@ export class AIService {
     // 5. Build system instruction with live context and Boss Lady persona
     const systemPrompt = PromptManager.getSystemPrompt(context, prefs?.assistant_tone || 'Confident & Proactive');
 
-    // If an ERP sync or attendance tool executed successfully, use its deterministic mathematical result
-    const executedDirectTool = toolResults.find(t => (t.tool === 'sync_uuerp' || t.tool === 'mark_attendance') && t.success);
+    // If a deterministic tool executed successfully, use its accurate factual result
+    const executedDirectTool = toolResults.find(t => t.success && t.message);
     let responseText: string | null = executedDirectTool?.message || null;
 
     // 6. Query Connected Gemini Model API if no direct deterministic message
