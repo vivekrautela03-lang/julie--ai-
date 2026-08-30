@@ -4,7 +4,7 @@
 // =============================================================================
 
 import React from 'react';
-import { ArrowLeft, Menu } from 'lucide-react';
+import { ArrowLeft, Menu, Key } from 'lucide-react';
 import { JulieAuraOrb, type OrbState } from './JulieAuraOrb';
 
 interface TopHeaderProps {
@@ -12,6 +12,7 @@ interface TopHeaderProps {
   onBackToChat: () => void;
   onOpenMenu: () => void;
   onOpenVoice: () => void;
+  onOpenApiKey?: () => void;
   orbState?: OrbState;
 }
 
@@ -20,6 +21,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   onBackToChat,
   onOpenMenu,
   onOpenVoice,
+  onOpenApiKey,
   orbState = 'idle',
 }) => {
   const isChat = activeTab === 'chat';
@@ -70,14 +72,27 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
         </div>
       </div>
 
-      {/* Right: Mini Glowing Aura Orb Voice Trigger */}
-      <button
-        onClick={onOpenVoice}
-        className="p-1 rounded-2xl hover:bg-white/5 transition-all active:scale-90"
-        title="Tap to speak with Julie"
-      >
-        <JulieAuraOrb state={orbState} size="sm" />
-      </button>
+      {/* Right: API Key Setup & Mini Glowing Aura Orb Voice Trigger */}
+      <div className="flex items-center gap-1.5">
+        {onOpenApiKey && (
+          <button
+            onClick={onOpenApiKey}
+            className="p-1.5 px-2 rounded-xl liquid-glass border border-sky-400/30 hover:border-sky-400 text-sky-300 text-[10px] font-bold flex items-center gap-1 active:scale-95 transition-all"
+            title="Setup Gemini API Key"
+          >
+            <Key className="w-3.5 h-3.5 text-sky-400" />
+            <span className="hidden xs:inline">API Key</span>
+          </button>
+        )}
+
+        <button
+          onClick={onOpenVoice}
+          className="p-1 rounded-2xl hover:bg-white/5 transition-all active:scale-90"
+          title="Tap to speak with Julie"
+        >
+          <JulieAuraOrb state={orbState} size="sm" />
+        </button>
+      </div>
     </header>
   );
 };

@@ -16,11 +16,13 @@ import {
   Info,
   ChevronRight,
   Sparkles,
+  Key,
 } from 'lucide-react';
 import { ConnectedAppsModal } from '@/components/integrations/ConnectedAppsModal';
 import { FirebaseAuthModal } from '@/components/auth/FirebaseAuthModal';
 import { VoicePersonaModal } from '@/components/settings/VoicePersonaModal';
 import { UUERPModal } from '@/components/integrations/UUERPModal';
+import { ApiKeyModal } from '@/components/auth/ApiKeyModal';
 import { voiceService } from '@/services/voice/VoiceService';
 
 interface SettingsViewProps {
@@ -32,11 +34,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
   const [isFirebaseAuthOpen, setIsFirebaseAuthOpen] = useState(false);
   const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
   const [isUUERPOpen, setIsUUERPOpen] = useState(false);
+  const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
 
   const currentTheme = (localStorage.getItem('julie_theme') as 'dark' | 'light') || 'dark';
   const activeVoice = voiceService.getPersona();
 
   const settingsItems = [
+    { id: 'api_key', label: 'Google Gemini API Key (Neural Core)', icon: Key, badge: '● Gemini 2.5' },
     { id: 'uuerp', label: 'Uttaranchal University Cyborg-ERP', icon: Grid, badge: '● Connected' },
     { id: 'assistant', label: `Assistant Voice (${activeVoice.name.split(' ')[0]})`, icon: Sparkles, badge: activeVoice.accent },
     { id: 'voice', label: 'Voice & Speech Engine Options', icon: Mic, badge: '5 Personas' },
@@ -49,7 +53,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
   ];
 
   const handleItemClick = (id: string) => {
-    if (id === 'uuerp') {
+    if (id === 'api_key') {
+      setIsApiKeyModalOpen(true);
+    } else if (id === 'uuerp') {
       setIsUUERPOpen(true);
     } else if (id === 'assistant' || id === 'voice') {
       setIsVoiceModalOpen(true);
@@ -131,6 +137,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
       <FirebaseAuthModal
         isOpen={isFirebaseAuthOpen}
         onClose={() => setIsFirebaseAuthOpen(false)}
+      />
+      <ApiKeyModal
+        isOpen={isApiKeyModalOpen}
+        onClose={() => setIsApiKeyModalOpen(false)}
       />
     </div>
   );

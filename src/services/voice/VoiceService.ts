@@ -1,6 +1,7 @@
 // =============================================================================
-// PROJECT JULIE — HIGH-FIDELITY VOICE ENGINE WITH FEMALE VOICE PERSONAS
-// Multiple female voice choices, Web Audio live volume analysis, resilient STT & natural TTS
+// PROJECT JULIE — HIGH-FIDELITY MOBILE & DESKTOP VOICE ENGINE
+// Multiple female voice personas, Web Audio live spectrum, mobile touch unlock,
+// resilient mobile STT, and natural zero-lag TTS across Android, iOS & Desktop.
 // =============================================================================
 
 export interface VoiceState {
@@ -10,6 +11,7 @@ export interface VoiceState {
   interimTranscript: string;
   audioLevel: number; // 0.0 to 1.0 live mic volume
   hasMicPermission: boolean;
+  isMobileUnlocked: boolean;
   error?: string;
 }
 
@@ -37,7 +39,7 @@ export const FEMALE_VOICE_PERSONAS: VoicePersona[] = [
     samplePhrase: "Good morning, boss. Your schedule and attendance recovery plan are locked and ready.",
     pitch: 1.05,
     rate: 1.05,
-    keywords: ['Google UK English Female', 'Google US English Female', 'Aria', 'Sonia', 'Victoria', 'Zira', 'Samantha'],
+    keywords: ['Google UK English Female', 'Google US English Female', 'Aria', 'Sonia', 'Victoria', 'Zira', 'Samantha', 'en-US-language', 'en_US'],
   },
   {
     id: 'serena_calm',
@@ -48,7 +50,7 @@ export const FEMALE_VOICE_PERSONAS: VoicePersona[] = [
     samplePhrase: "Hello. I've analyzed your timetable and academic deadlines for the week.",
     pitch: 0.98,
     rate: 0.98,
-    keywords: ['Google UK English Female', 'Hazel', 'Susan', 'Serena', 'British', 'en-GB'],
+    keywords: ['Google UK English Female', 'Hazel', 'Susan', 'Serena', 'British', 'en-GB', 'en_GB'],
   },
   {
     id: 'aria_natural',
@@ -59,7 +61,7 @@ export const FEMALE_VOICE_PERSONAS: VoicePersona[] = [
     samplePhrase: "Hey there! Ready to crush your goals and get through today's classes?",
     pitch: 1.10,
     rate: 1.02,
-    keywords: ['Aria', 'Jenny', 'Samantha', 'Google US English Female', 'en-US'],
+    keywords: ['Aria', 'Jenny', 'Samantha', 'Google US English Female', 'en-US', 'en_US', 'default'],
   },
   {
     id: 'natasha_crisp',
@@ -70,7 +72,7 @@ export const FEMALE_VOICE_PERSONAS: VoicePersona[] = [
     samplePhrase: "Understood. Class reminder active. Attendance recalculated at 60.34%.",
     pitch: 1.02,
     rate: 1.14,
-    keywords: ['Karen', 'Victoria', 'Moira', 'en-AU', 'en-CA'],
+    keywords: ['Karen', 'Victoria', 'Moira', 'en-AU', 'en-CA', 'en_AU'],
   },
   {
     id: 'maya_warm',
@@ -81,7 +83,7 @@ export const FEMALE_VOICE_PERSONAS: VoicePersona[] = [
     samplePhrase: "Namaste, boss! Don't worry about the attendance shortage, we have a clear path to 75%.",
     pitch: 1.06,
     rate: 1.0,
-    keywords: ['Google Hindi Female', 'Heera', 'Veena', 'en-IN', 'English India'],
+    keywords: ['Google Hindi Female', 'Heera', 'Veena', 'en-IN', 'en_IN', 'English India'],
   },
 ];
 
@@ -101,6 +103,9 @@ export class VoiceService {
   private isRecognitionRunning: boolean = false;
   private shouldKeepListening: boolean = false;
   private currentPersonaId: VoicePersonaId = 'julie_boss';
+  private isAudioUnlocked: boolean = false;
+  private currentUtterance: SpeechSynthesisUtterance | null = null;
+  private speechSafetyTimer: any = null;
   
   private state: VoiceState = {
     isListening: false,
@@ -109,6 +114,7 @@ export class VoiceService {
     interimTranscript: '',
     audioLevel: 0,
     hasMicPermission: true,
+    isMobileUnlocked: false,
   };
 
   constructor() {
@@ -127,6 +133,57 @@ export class VoiceService {
       }
 
       this.initRecognition();
+      this.attachMobileTouchUnlock();
+    }
+  }
+
+  /**
+   * Automatically unlocks audio contexts on first user interaction on mobile devices.
+   */
+  private attachMobileTouchUnlock(): void {
+    if (typeof window === 'undefined') return;
+
+    const unlockHandler = () => {
+      this.unlockMobileAudio();
+      window.removeEventListener('touchstart', unlockHandler);
+      window.removeEventListener('click', unlockHandler);
+    };
+
+    window.addEventListener('touchstart', unlockHandler, { passive: true });
+    window.addEventListener('click', unlockHandler, { passive: true });
+  }
+
+  /**
+   * Primes and unlocks the mobile audio pipeline (AudioContext + SpeechSynthesis).
+   */
+  public unlockMobileAudio(): void {
+    if (this.isAudioUnlocked) return;
+    this.isAudioUnlocked = true;
+
+    try {
+      // 1. Prime Web Audio Context
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioCtx) {
+        if (!this.audioContext || this.audioContext.state === 'closed') {
+          this.audioContext = new AudioCtx();
+        }
+        if (this.audioContext.state === 'suspended') {
+          this.audioContext.resume().catch(() => {});
+        }
+      }
+
+      // 2. Prime SpeechSynthesis for mobile Safari / Chrome
+      if (this.synthesis) {
+        const dummy = new SpeechSynthesisUtterance(' ');
+        dummy.volume = 0.01;
+        this.synthesis.speak(dummy);
+        this.loadVoices();
+      }
+
+      this.updateState({ isMobileUnlocked: true });
+      console.log('[Julie Voice] Mobile audio pipeline unlocked successfully.');
+    } catch (e) {
+      console.warn('[Julie Voice] Mobile unlock note:', e);
     }
   }
 
@@ -212,7 +269,7 @@ export class VoiceService {
             this.updateState({
               isListening: false,
               hasMicPermission: false,
-              error: 'Microphone permission denied. Please allow microphone access in browser settings.',
+              error: 'Microphone permission denied. Please allow microphone access in your mobile browser settings.',
             });
             this.isRecognitionRunning = false;
             return;
@@ -250,7 +307,10 @@ export class VoiceService {
 
   private loadVoices(): void {
     if (!this.synthesis) return;
-    this.availableVoices = this.synthesis.getVoices();
+    const voices = this.synthesis.getVoices();
+    if (voices && voices.length > 0) {
+      this.availableVoices = voices;
+    }
   }
 
   private async startAudioAnalysis(): Promise<void> {
@@ -258,7 +318,13 @@ export class VoiceService {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
 
       if (!this.micStream) {
-        this.micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        this.micStream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
+        });
       }
 
       if (!this.audioContext || this.audioContext.state === 'closed') {
@@ -326,9 +392,11 @@ export class VoiceService {
   }
 
   startListening(): void {
+    this.unlockMobileAudio();
+
     if (!this.recognition) {
       this.updateState({
-        error: 'Speech recognition is not supported in this browser. Please use Chrome or Edge.',
+        error: 'Speech recognition requires Chrome, Edge or Safari. You can also type below!',
       });
       return;
     }
@@ -380,6 +448,7 @@ export class VoiceService {
     const voices = this.availableVoices;
     if (!voices || voices.length === 0) return null;
 
+    // 1. Try keyword match
     for (const keyword of persona.keywords) {
       const match = voices.find(
         v => v.name.toLowerCase().includes(keyword.toLowerCase()) || v.lang.toLowerCase().includes(keyword.toLowerCase())
@@ -387,16 +456,20 @@ export class VoiceService {
       if (match) return match;
     }
 
+    // 2. Try any female voice
     const anyFemale = voices.find(
       v => (v.name.toLowerCase().includes('female') || v.name.toLowerCase().includes('woman')) && v.lang.startsWith('en')
     );
     if (anyFemale) return anyFemale;
 
+    // 3. Try any English voice
     const anyEn = voices.find(v => v.lang.startsWith('en'));
     return anyEn || voices[0] || null;
   }
 
   speak(text: string, onEnd?: () => void): void {
+    this.unlockMobileAudio();
+
     if (!this.synthesis) {
       if (onEnd) onEnd();
       return;
@@ -407,10 +480,13 @@ export class VoiceService {
     }
     this.synthesis.cancel();
 
+    // Clean text for speech: strip markdown, code blocks, emojis, bullets
     const cleanText = text
-      .replace(/[*_#`~[\]]/g, '')
-      .replace(/[👋👑✨✦•●☀️⛅🌧️⏰📍⚡]/g, '')
-      .replace(/\n+/g, ' ')
+      .replace(/```[\s\S]*?```/g, 'Code snippet provided in chat.')
+      .replace(/`([^`]+)`/g, '$1')
+      .replace(/[*_#~[\]]/g, '')
+      .replace(/[👋👑✨✦•●☀️⛅🌧️⏰📍⚡🎓✅⚠️❌]/g, '')
+      .replace(/\s+/g, ' ')
       .trim();
 
     if (!cleanText) {
@@ -429,66 +505,89 @@ export class VoiceService {
       utterance.voice = matchedVoice;
     }
 
+    this.currentUtterance = utterance;
     this.stopListening();
     this.updateState({ isSpeaking: true });
 
-    if (this.resumeTimer) clearInterval(this.resumeTimer);
-    this.resumeTimer = setInterval(() => {
-      if (this.synthesis && this.synthesis.speaking) {
-        this.synthesis.pause();
-        this.synthesis.resume();
-      } else {
-        clearInterval(this.resumeTimer);
+    if (this.speechSafetyTimer) clearTimeout(this.speechSafetyTimer);
+    const estimatedDurationMs = Math.max(3500, cleanText.split(' ').length * 500 + 2000);
+    this.speechSafetyTimer = setTimeout(() => {
+      if (this.state.isSpeaking) {
+        console.log('[Julie Voice] Safety speech timeout completed.');
+        this.updateState({ isSpeaking: false });
+        this.currentUtterance = null;
+        if (onEnd) onEnd();
       }
-    }, 4500);
+    }, estimatedDurationMs);
 
     utterance.onend = () => {
-      if (this.resumeTimer) clearInterval(this.resumeTimer);
+      if (this.speechSafetyTimer) clearTimeout(this.speechSafetyTimer);
+      this.currentUtterance = null;
       this.updateState({ isSpeaking: false });
       if (onEnd) onEnd();
     };
 
-    utterance.onerror = (e: any) => {
-      if (this.resumeTimer) clearInterval(this.resumeTimer);
+    utterance.onerror = (e) => {
+      console.warn('[Julie Voice] Speech utterance error:', e);
+      if (this.speechSafetyTimer) clearTimeout(this.speechSafetyTimer);
+      this.currentUtterance = null;
       this.updateState({ isSpeaking: false });
       if (onEnd) onEnd();
     };
 
     try {
       this.synthesis.speak(utterance);
-    } catch (err: any) {
-      console.warn('[Julie Voice] SpeechSynthesis speak note:', err);
+    } catch (err) {
+      console.warn('[Julie Voice] Speech speak error:', err);
+      if (this.speechSafetyTimer) clearTimeout(this.speechSafetyTimer);
+      this.currentUtterance = null;
       this.updateState({ isSpeaking: false });
       if (onEnd) onEnd();
     }
   }
 
+  /**
+   * Tests mobile audio playback immediately with a confirmation phrase.
+   */
+  testMobileVoice(onComplete?: () => void): void {
+    this.unlockMobileAudio();
+    const persona = this.getPersona();
+    this.speak(
+      `Hello boss! Voice engine is active and ready on your mobile phone. Persona set to ${persona.name}.`,
+      onComplete
+    );
+  }
+
   stopSpeaking(): void {
-    if (this.resumeTimer) clearInterval(this.resumeTimer);
     if (this.synthesis) {
       this.synthesis.cancel();
     }
     this.updateState({ isSpeaking: false });
   }
 
-  subscribe(listener: VoiceStateListener): () => void {
-    this.listeners.add(listener);
-    listener(this.state);
-    return () => {
-      this.listeners.delete(listener);
-    };
+  getState(): VoiceState {
+    return { ...this.state };
   }
 
-  getState(): VoiceState {
-    return this.state;
+  subscribe(listener: VoiceStateListener): () => void {
+    this.listeners.add(listener);
+    listener(this.getState());
+    return () => this.listeners.delete(listener);
   }
 
   private updateState(partial: Partial<VoiceState>): void {
     this.state = { ...this.state, ...partial };
+    this.notifyListeners();
+  }
+
+  private notifyListeners(): void {
+    const currentState = this.getState();
     this.listeners.forEach(listener => {
       try {
-        listener(this.state);
-      } catch (e) {}
+        listener(currentState);
+      } catch (err) {
+        console.warn('[Julie Voice] Listener error:', err);
+      }
     });
   }
 }

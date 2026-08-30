@@ -23,6 +23,7 @@ import {
   Download,
   Volume2,
   RefreshCw,
+  Key,
 } from 'lucide-react';
 import type { DrawerTab } from '@/components/common/GlassDrawer';
 import { OFFICIAL_ATTENDANCE_OVERALL } from '@/core/data/userAttendance';
@@ -33,9 +34,11 @@ import { db, CURRENT_USER_ID } from '@/core/storage/db';
 import { VoicePersonaModal } from '@/components/settings/VoicePersonaModal';
 import { InstallAppModal } from '@/components/common/InstallAppModal';
 import { UUERPModal } from '@/components/integrations/UUERPModal';
+import { ApiKeyModal } from '@/components/auth/ApiKeyModal';
 import { uuerpAdapter } from '@/services/integrations/UttaranchalUniversityERPAdapter';
 import type { Task } from '@/core/types';
 import { DailyERPSyncService } from '@/services/integrations/DailyERPSyncService';
+import { voiceService } from '@/services/voice/VoiceService';
 
 interface DashboardViewProps {
   onBack?: () => void;
@@ -58,6 +61,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
   const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
   const [isUUERPModalOpen, setIsUUERPModalOpen] = useState(false);
+  const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
 
   // Immediate Sync State
   const [isManualSyncing, setIsManualSyncing] = useState(false);
@@ -240,6 +244,44 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </div>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* AI ASSISTANT NEURAL CORE & MOBILE VOICE STATUS BAR */}
+      <div className="p-2.5 rounded-2xl liquid-glass border border-sky-500/30 flex items-center justify-between gap-2 shadow-lg">
+        <div className="flex items-center gap-2 overflow-hidden">
+          <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+          <div className="truncate">
+            <span className="text-[10px] font-extrabold text-sky-300 block uppercase tracking-wider">
+              Gemini 2.5 Flash Neural Core
+            </span>
+            <p className="text-[10px] text-slate-400 truncate">
+              Live AI Assistant Active • Mobile Voice Ready
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            onClick={() => setIsApiKeyModalOpen(true)}
+            className="px-2 py-1.5 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 border border-purple-400/40 text-purple-300 text-[10px] font-bold flex items-center gap-1 active:scale-95 transition-all"
+            title="Setup or change Gemini API Key"
+          >
+            <Key className="w-3 h-3 text-purple-400" />
+            <span>API Key</span>
+          </button>
+
+          <button
+            onClick={() => {
+              voiceService.unlockMobileAudio();
+              voiceService.testMobileVoice();
+            }}
+            className="px-2.5 py-1.5 rounded-xl bg-sky-500/20 hover:bg-sky-500/30 border border-sky-400/40 text-sky-300 text-[10px] font-bold flex items-center gap-1 active:scale-95 transition-all"
+            title="Test speaker on your mobile phone"
+          >
+            <Volume2 className="w-3 h-3 text-sky-400" />
+            <span>Test Voice</span>
+          </button>
         </div>
       </div>
 
@@ -516,6 +558,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       <InstallAppModal
         isOpen={isInstallModalOpen}
         onClose={() => setIsInstallModalOpen(false)}
+      />
+
+      <ApiKeyModal
+        isOpen={isApiKeyModalOpen}
+        onClose={() => setIsApiKeyModalOpen(false)}
       />
     </div>
   );

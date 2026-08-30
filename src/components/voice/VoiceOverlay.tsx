@@ -204,11 +204,21 @@ export const VoiceOverlay: React.FC<VoiceOverlayProps> = ({ isOpen, onClose }) =
           </div>
         )}
 
-        {/* Permission Prompt Only if Mic is explicitly blocked */}
+        {/* Permission Prompt or Mobile HTTP Guidance */}
         {!voiceState.hasMicPermission && voiceState.error && (
-          <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center gap-2 max-w-xs text-left">
-            <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
-            <span>{voiceState.error}</span>
+          <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex flex-col gap-2 max-w-xs text-left animate-fade-in">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+              <span className="font-semibold">{voiceState.error}</span>
+            </div>
+            {typeof window !== 'undefined' && window.location.protocol === 'http:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' && (
+              <a
+                href={`https://${window.location.hostname}:5173`}
+                className="px-2.5 py-1.5 rounded-xl bg-amber-400 text-slate-950 font-black text-[11px] text-center active:scale-95 transition-all shadow-md"
+              >
+                🔒 Tap Here: Switch to HTTPS (Enables Mobile Mic)
+              </a>
+            )}
           </div>
         )}
 
@@ -235,18 +245,35 @@ export const VoiceOverlay: React.FC<VoiceOverlayProps> = ({ isOpen, onClose }) =
           </div>
         )}
 
-        {/* Quick Sample Voice Prompts */}
+        {/* Quick Sample Voice Prompts & Mobile Voice Tester */}
         {conversationHistory.length === 0 && !liveTranscript && (
-          <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1">
-            {sampleVoicePrompts.map((prompt, i) => (
+          <div className="space-y-2 pt-1">
+            <div className="flex flex-wrap items-center justify-center gap-1.5">
+              {sampleVoicePrompts.map((prompt, i) => (
+                <button
+                  key={i}
+                  onClick={() => {
+                    voiceService.unlockMobileAudio();
+                    processQuery(prompt);
+                  }}
+                  className="px-3 py-1 rounded-full liquid-pill text-[10px] font-medium text-slate-300 hover:text-white hover:border-sky-400/40 active:scale-95 transition-all"
+                >
+                  💬 {prompt}
+                </button>
+              ))}
+            </div>
+
+            {/* Mobile Voice Speaker Test Button */}
+            <div className="flex items-center justify-center gap-2 pt-1">
               <button
-                key={i}
-                onClick={() => processQuery(prompt)}
-                className="px-3 py-1 rounded-full liquid-pill text-[10px] font-medium text-slate-300 hover:text-white hover:border-sky-400/40 active:scale-95 transition-all"
+                onClick={() => voiceService.testMobileVoice()}
+                className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-sky-500/10 hover:bg-sky-500/20 border border-sky-400/30 text-sky-300 text-[10px] font-bold active:scale-95 transition-all"
+                title="Tap to test speaker on your phone"
               >
-                💬 {prompt}
+                <Volume2 className="w-3 h-3 text-sky-400" />
+                <span>🔊 Test Mobile Voice</span>
               </button>
-            ))}
+            </div>
           </div>
         )}
       </div>

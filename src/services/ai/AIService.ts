@@ -188,6 +188,44 @@ export class AIService {
       const toolRes = await ToolRouter.executeTool('save_memory', { content, memory_type: 'explicit', category: 'Goals' }, source);
       toolResults.push(toolRes);
     }
+    // 13. Web Search (News, Research, Latest Information)
+    else if (
+      qLower.startsWith('search ') ||
+      qLower.startsWith('google ') ||
+      qLower.includes('search web') ||
+      qLower.includes('latest news') ||
+      qLower.includes('search for')
+    ) {
+      const q = cleanQuery.replace(/^(search for|search web for|search web|search|google)/i, '').trim();
+      const toolRes = await ToolRouter.executeTool('web_search', { query: q, mode: 'news' }, source);
+      toolResults.push(toolRes);
+    }
+    // 14. Live Weather
+    else if (qLower.includes('weather') || qLower.includes('temperature today') || qLower.includes('forecast')) {
+      const toolRes = await ToolRouter.executeTool('weather_report', { city: 'Dehradun' }, source);
+      toolResults.push(toolRes);
+    }
+    // 15. System Status / Hardware Telemetry
+    else if (
+      qLower.includes('system status') ||
+      qLower.includes('hardware') ||
+      qLower.includes('cpu') ||
+      qLower.includes('device status') ||
+      qLower.includes('battery')
+    ) {
+      const toolRes = await ToolRouter.executeTool('system_status', {}, source);
+      toolResults.push(toolRes);
+    }
+    // 16. Code Helper / Debugging
+    else if (
+      qLower.includes('review this code') ||
+      qLower.includes('write code') ||
+      qLower.includes('debug') ||
+      qLower.startsWith('code ')
+    ) {
+      const toolRes = await ToolRouter.executeTool('code_helper', { query: cleanQuery }, source);
+      toolResults.push(toolRes);
+    }
 
     // 4. Retrieve recent message history for conversational memory
     const historyRecords = await db.messages.where('conversation_id').equals(conversationId).reverse().limit(6).toArray();

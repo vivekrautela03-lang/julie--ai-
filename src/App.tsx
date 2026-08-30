@@ -24,11 +24,18 @@ import { NotificationsView } from '@/components/notifications/NotificationsView'
 import { ConnectionsView } from '@/components/connections/ConnectionsView';
 import { SettingsView } from '@/components/settings/SettingsView';
 import { ProfileView } from '@/components/profile/ProfileView';
+import { ApiKeyModal } from '@/components/auth/ApiKeyModal';
 
 export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<DrawerTab>('chat');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isVoiceOverlayOpen, setIsVoiceOverlayOpen] = useState(false);
+  const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return !localStorage.getItem('julie_api_key_configured');
+    }
+    return false;
+  });
   const [orbState, setOrbState] = useState<OrbState>('idle');
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
     return (localStorage.getItem('julie_theme') as 'dark' | 'light') || 'dark';
@@ -129,6 +136,7 @@ export const App: React.FC = () => {
           onBackToChat={handleReturnToChat}
           onOpenMenu={() => setIsMenuOpen(true)}
           onOpenVoice={() => setIsVoiceOverlayOpen(true)}
+          onOpenApiKey={() => setIsApiKeyModalOpen(true)}
           orbState={orbState}
         />
 
@@ -197,6 +205,12 @@ export const App: React.FC = () => {
         <VoiceOverlay
           isOpen={isVoiceOverlayOpen}
           onClose={() => setIsVoiceOverlayOpen(false)}
+        />
+
+        {/* Direct Gemini API Key Setup Modal */}
+        <ApiKeyModal
+          isOpen={isApiKeyModalOpen}
+          onClose={() => setIsApiKeyModalOpen(false)}
         />
       </div>
     </div>
