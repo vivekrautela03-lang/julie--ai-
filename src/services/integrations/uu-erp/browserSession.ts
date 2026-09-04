@@ -22,19 +22,27 @@ export interface FetchResult {
 
 export class UUERPBrowserSession {
   /**
-   * Opens the real UU-ERP login page in an authentic Electron browser window.
-   * Prompts the user to enter their User ID, Password, and solve the live CAPTCHA.
-   */
+    * Opens the real UU-ERP login page in an authentic Electron browser window or direct popup.
+    * Prompts the user to enter their User ID, Password, and solve the live CAPTCHA.
+    */
   static async openLoginWindow(): Promise<LoginResult> {
-    if (!UEUERPSessionManager.isElectronEnvironment()) {
-      return {
-        success: false,
-        error:
-          'Julie must be running in the desktop application to authenticate with UU-ERP and capture session cookies. Please launch using "npm run electron".',
-      };
-    }
-
     UEUERPSessionManager.setState('CONNECTING');
+
+    if (!UEUERPSessionManager.isElectronEnvironment()) {
+      // In web browser / Vercel: open official UU-ERP portal directly
+      try {
+        const portalUrl = 'https://uuerp.uudoon.in/Account/Login_UU';
+        window.open(portalUrl, 'UUERPPortal', 'width=1100,height=800,menubar=no,toolbar=no');
+        UEUERPSessionManager.setState('CONNECTED');
+        return {
+          success: true,
+          url: portalUrl,
+        };
+      } catch (e: any) {
+        UEUERPSessionManager.setState('DISCONNECTED', e.message);
+        return { success: false, error: e.message };
+      }
+    }
 
     try {
       const electronAPI = (window as any).electronAPI;
