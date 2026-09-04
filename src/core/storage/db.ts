@@ -47,6 +47,15 @@ export class JulieDatabase extends Dexie {
   messages!: Table<ConversationMessage, string>;
   files!: Table<FileItem, string>;
   syncQueue!: Table<{ id: string; table: string; action: string; payload: any; timestamp: string }, string>;
+  
+  // Autonomous UU-ERP Data Platform Stores
+  erpEntities!: Table<import('@/services/integrations/uu-erp/types').ERPEntityRecord, string>;
+  erpEvents!: Table<import('@/services/integrations/uu-erp/types').ERPEventQueueItem, string>;
+  erpDeadLetterQueue!: Table<import('@/services/integrations/uu-erp/types').ERPDeadLetterItem, string>;
+  erpAuditLogs!: Table<import('@/services/integrations/uu-erp/types').ERPAuditLog, string>;
+  erpConflicts!: Table<import('@/services/integrations/uu-erp/types').ERPConflictRecord, string>;
+  erpSchemas!: Table<any, string>;
+  erpSyncCheckpoints!: Table<import('@/services/integrations/uu-erp/types').ERPSyncCheckpoint, string>;
 
   constructor() {
     super('JulieExecutiveDB');
@@ -72,6 +81,16 @@ export class JulieDatabase extends Dexie {
       messages: 'id, conversation_id, user_id, created_at',
       files: 'id, user_id, project_id, subject_id, file_type',
       syncQueue: 'id, table, action, timestamp',
+    });
+
+    this.version(2).stores({
+      erpEntities: 'id, tenant_id, entity_type, external_id, version, checksum, updated_at, last_synced_at, sync_status',
+      erpEvents: 'id, tenant_id, event_id, entity_type, entity_id, event_type, status, retry_count, created_at, processed_at',
+      erpDeadLetterQueue: 'id, tenant_id, event_id, entity_type, entity_id, error_message, payload, retry_count, failed_at, resolution_status',
+      erpAuditLogs: 'id, tenant_id, actor_id, actor_role, action, entity_type, entity_id, status, timestamp',
+      erpConflicts: 'id, tenant_id, entity_type, entity_id, resolution_strategy, resolved_at',
+      erpSchemas: 'id, tenant_id, entity_type, primary_key, updated_at',
+      erpSyncCheckpoints: 'id, tenant_id, entity_type, sync_phase, status',
     });
   }
 }

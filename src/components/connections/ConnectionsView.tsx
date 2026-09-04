@@ -19,6 +19,7 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { UUERPModal } from '@/components/integrations/UUERPModal';
+import { UEUERPSessionManager } from '@/services/integrations/uu-erp';
 
 interface ConnectionsViewProps {
   onBack?: () => void;
@@ -26,6 +27,21 @@ interface ConnectionsViewProps {
 
 export const ConnectionsView: React.FC<ConnectionsViewProps> = ({ onBack }) => {
   const [isUUERPModalOpen, setIsUUERPModalOpen] = useState(false);
+  const [erpState, setErpState] = useState(() => UEUERPSessionManager.getState());
+
+  React.useEffect(() => {
+    return UEUERPSessionManager.subscribe((s) => setErpState(s));
+  }, []);
+
+  const isUUConnected = erpState === 'CONNECTED';
+  const uuerpBadge =
+    erpState === 'CONNECTED'
+      ? '● Connected'
+      : erpState === 'SESSION_EXPIRED'
+      ? '⚠️ Expired'
+      : erpState === 'SYNCING'
+      ? '⟳ Syncing'
+      : 'Action Required';
 
   const [connections, setConnections] = useState([
     {
@@ -34,8 +50,8 @@ export const ConnectionsView: React.FC<ConnectionsViewProps> = ({ onBack }) => {
       subtitle: 'https://uuerp.uudoon.in/Account/Cyborg_StudentMenu',
       icon: GraduationCap,
       color: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-      connected: true,
-      badge: 'Live Portal',
+      connected: isUUConnected,
+      badge: uuerpBadge,
       isUUERP: true,
     },
     {
@@ -137,9 +153,9 @@ export const ConnectionsView: React.FC<ConnectionsViewProps> = ({ onBack }) => {
                 <div className="overflow-hidden">
                   <div className="flex items-center gap-1.5">
                     <h3 className="text-xs font-bold text-white leading-tight truncate">{item.name}</h3>
-                    {item.badge && (
+                    {(item.isUUERP ? uuerpBadge : item.badge) && (
                       <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 shrink-0">
-                        {item.badge}
+                        {item.isUUERP ? uuerpBadge : item.badge}
                       </span>
                     )}
                   </div>
@@ -148,7 +164,7 @@ export const ConnectionsView: React.FC<ConnectionsViewProps> = ({ onBack }) => {
               </div>
 
               <div className="shrink-0">
-                {item.connected ? (
+                {(item.isUUERP ? isUUConnected : item.connected) ? (
                   <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[11px] font-semibold">
                     <CheckCircle2 className="w-3.5 h-3.5" />
                     <span>Connected</span>

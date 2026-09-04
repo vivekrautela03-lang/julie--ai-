@@ -62,18 +62,12 @@ export class ERPAuthVault {
       console.warn('[ERPAuthVault] Session read note:', e);
     }
 
-    // Default authorized student configuration for Uttaranchal University
+    // Default initial configuration when no session exists
     return {
       provider: 'Uttaranchal University Cyborg-ERP',
       portalUrl: 'https://uuerp.uudoon.in/Account/Login_UU',
-      studentId: 'UU21BBA1042',
-      studentName: 'Vivek',
-      program: 'Bachelor of Business Administration (BBA)',
-      semester: 4,
-      sessionToken: 'cyborg_sess_token_auth_valid',
-      status: 'connected',
-      lastSyncedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      expiresAt: new Date(Date.now() + 72 * 3600000).toISOString(),
+      studentId: '',
+      status: 'disconnected',
     };
   }
 

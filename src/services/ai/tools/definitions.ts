@@ -145,4 +145,66 @@ export const JULIE_TOOLS: ToolDefinition[] = [
       required: ['topic'],
     },
   },
+  {
+    name: 'get_student',
+    description: 'Retrieves authoritative student profile, enrollment, and contact info from UU ERP.',
+    permissionTier: 'read',
+    parameters: {
+      type: 'object',
+      properties: {
+        student_id: { type: 'string', description: 'Student ID or Roll No (e.g. UU21BBA1042)' },
+      },
+    },
+  },
+  {
+    name: 'search_students',
+    description: 'Searches student records in UU ERP by name, program, section, or roll number.',
+    permissionTier: 'read',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Search term' },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'get_fee_status',
+    description: 'Retrieves authoritative semester fee payment status, balance due, and receipt numbers from UU ERP.',
+    permissionTier: 'read',
+    parameters: {
+      type: 'object',
+      properties: {
+        student_id: { type: 'string', description: 'Optional Student ID or Roll No' },
+      },
+    },
+  },
+  {
+    name: 'get_sync_diagnostics',
+    description: 'Runs self-healing diagnostics and answers telemetry questions about UU ERP sync health, queue depth, webhooks, and latency.',
+    permissionTier: 'read',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Diagnostic question (e.g. "Why is attendance not updating?", "Queue depth")' },
+      },
+    },
+  },
+  {
+    name: 'execute_erp_action',
+    description: 'Executes a controlled, authorized mutation back into UU ERP with RBAC permission validation and staged confirmation for high-risk actions.',
+    permissionTier: 'write',
+    parameters: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', enum: ['create_record', 'update_record', 'delete_record', 'approve_record', 'bulk_update'] },
+        entity_type: { type: 'string', description: 'Target entity (students, attendance, fees, etc.)' },
+        entity_id: { type: 'string', description: 'Target record ID' },
+        payload: { type: 'object', description: 'Data mutation payload' },
+        reason: { type: 'string', description: 'Justification for audit trail' },
+        is_confirmed: { type: 'boolean', description: 'User explicit confirmation for high-risk actions' },
+      },
+      required: ['action', 'entity_type', 'payload', 'reason'],
+    },
+  },
 ];

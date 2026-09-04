@@ -311,11 +311,17 @@ export class ToolRouter {
         // ---------------------------------------------------------------------
         case 'sync_erp':
         case 'sync_uuerp': {
-          const { uuerpAdapter } = await import('@/services/integrations/UttaranchalUniversityERPAdapter');
-          const syncRes = await uuerpAdapter.sync();
-          const config = uuerpAdapter.getSavedConfig();
+          const { UUERPSyncEngine, UEUERPSessionManager } = await import('@/services/integrations/uu-erp');
+          const syncRes = await UUERPSyncEngine.sync();
+          const profile = UEUERPSessionManager.getProfile();
+          const freshness = UEUERPSessionManager.getFreshnessDescription();
 
-          const message = `✅ **Uttaranchal University Cyborg-ERP Synced Successfully!**\n\n• **Student ID**: ${config.studentId || 'UU21BBA1042'}\n• **Timetable**: ${syncRes.syncedClassesCount} Lectures across ${syncRes.syncedSubjectsCount} subjects (Room 304)\n• **Attendance**: ${syncRes.syncedAttendanceCount} records processed (Overall: **60.34%**)\n• **Assignments**: 3 assignments synchronized to to-do list\n• **Exams**: Mid-term datesheet active\n• **Portal Status**: ● Connected (${config.portalUrl})`;
+          let message = '';
+          if (syncRes.success) {
+            message = `✅ **Uttaranchal University Cyborg-ERP Synced Successfully!**\n\n• **Student ID**: ${profile?.studentId || 'Authenticated Student'}\n• **Student Name**: ${profile?.studentName || 'Student'}\n• **Subjects**: ${syncRes.syncedSubjectsCount} subjects\n• **Attendance Records**: ${syncRes.syncedAttendanceCount} records processed\n• **Overall Attendance**: **${syncRes.overall?.percentage ?? 0}%** (${syncRes.overall?.totalPresent ?? 0}/${syncRes.overall?.totalLectures ?? 0} lectures)\n• **Freshness**: ${freshness}`;
+          } else {
+            message = `⚠️ **UU-ERP Synchronization Notice:**\n\n${syncRes.message}\n\n${freshness}`;
+          }
 
           return {
             tool: toolName,
@@ -329,16 +335,27 @@ export class ToolRouter {
         // 12. GET_ERP_STATUS
         // ---------------------------------------------------------------------
         case 'get_erp_status': {
-          const { ERPAuthVault } = await import('@/services/integrations/ERPAuthVault');
-          const session = ERPAuthVault.getSession();
-          const isActive = ERPAuthVault.isSessionActive();
+          const { UEUERPSessionManager } = await import('@/services/integrations/uu-erp');
+          const meta = UEUERPSessionManager.getMetadata();
+          const profile = UEUERPSessionManager.getProfile();
+          const isConnected = UEUERPSessionManager.isConnected();
+          const freshness = UEUERPSessionManager.getFreshnessDescription();
 
-          const message = `🎓 **UU-ERP Connection Status:**\n\n• **Portal**: ${session.portalUrl}\n• **Student ID**: ${session.studentId}\n• **Status**: ${isActive ? '● Connected & Synchronized' : '⚠️ Connection Expired / Action Required'}\n• **Last Synchronized**: ${session.lastSyncedAt || 'Today'}\n• **Security**: AES Encrypted Session Token`;
+          const statusBadge =
+            meta.syncStatus === 'CONNECTED'
+              ? '● Connected'
+              : meta.syncStatus === 'SESSION_EXPIRED'
+              ? '⚠️ Session Expired'
+              : meta.syncStatus === 'SYNCING'
+              ? '⟳ Synchronizing...'
+              : 'Not Connected';
+
+          const message = `🎓 **UU-ERP Connection Status:**\n\n• **Portal**: https://uuerp.uudoon.in/\n• **Status**: ${statusBadge}\n• **Student**: ${profile?.studentName || 'Not Logged In'}${profile?.studentId ? ` (${profile.studentId})` : ''}\n• **Program**: ${profile?.program || 'N/A'}\n• **Freshness**: ${freshness}`;
 
           return {
             tool: toolName,
             success: true,
-            data: session,
+            data: { meta, profile, isConnected },
             message,
           };
         }
@@ -347,19 +364,37 @@ export class ToolRouter {
         // 13. GET_ATTENDANCE
         // ---------------------------------------------------------------------
         case 'get_attendance': {
-          const { OFFICIAL_ATTENDANCE_OVERALL, OFFICIAL_SUBJECT_ATTENDANCE } = await import('@/core/data/userAttendance');
-          const subjects = OFFICIAL_SUBJECT_ATTENDANCE.map(s => {
-            const missed = s.totalConducted - s.totalPresent;
-            const safeMiss = Math.floor(s.totalPresent / 0.75) - s.totalConducted;
-            return `• **${s.name}** (${s.code}): **${s.percentage}%** (${s.totalPresent}/${s.totalConducted} attended${safeMiss < 0 ? ` — Need ${Math.abs(safeMiss)} more classes for 75%` : ` — Can safely miss ${safeMiss}`})`;
+          const { UUERPSyncEngine, UEUERPSessionManager } = await import('@/services/integrations/uu-erp');
+          const cached = await UUERPSyncEngine.getCachedResults();
+          const freshness = UEUERPSessionManager.getFreshnessDescription();
+
+          if (cached.subjects.length === 0) {
+            return {
+              tool: toolName,
+              success: false,
+              data: null,
+              message: `📊 **UU-ERP Attendance:**\n\nNo synchronized attendance records found in Julie's database.\n\nPlease open the **UU-ERP** connection in Julie and log in to synchronize your official university attendance.`,
+            };
+          }
+
+          const subjectsText = cached.subjects.map(s => {
+            const statusText =
+              s.safeMisses > 0
+                ? `— Can safely miss ${s.safeMisses} lecture${s.safeMisses > 1 ? 's' : ''}`
+                : s.recoveryNeeded > 0
+                ? `— Need ${s.recoveryNeeded} consecutive class${s.recoveryNeeded > 1 ? 'es' : ''} for 75%`
+                : '— Right at 75% threshold';
+            return `• **${s.name}** (${s.code}): **${s.percentage}%** (${s.totalPresent}/${s.totalConducted} attended ${statusText})`;
           }).join('\n');
 
-          const message = `📊 **Official UU-ERP Attendance Standing:**\n\n**Overall Attendance**: **${OFFICIAL_ATTENDANCE_OVERALL.percentage}%** (${OFFICIAL_ATTENDANCE_OVERALL.totalPresent}/${OFFICIAL_ATTENDANCE_OVERALL.totalLectures} Lectures)\n\n**Subject-Wise Breakdown:**\n${subjects}\n\n💡 *Julie Alert*: Focus on attending upcoming *Digital Marketing (30.77%)* and *MS-Excel (55.56%)* classes in Room 304 to recover to 75%.`;
+          const lowestSubject = [...cached.subjects].sort((a, b) => a.percentage - b.percentage)[0];
+
+          const message = `📊 **Official UU-ERP Attendance Standing:**\n\n**Overall Attendance**: **${cached.overall?.percentage ?? 0}%** (${cached.overall?.totalPresent ?? 0}/${cached.overall?.totalLectures ?? 0} Lectures)\n\n**Subject-Wise Breakdown:**\n${subjectsText}\n\n🕒 *Data Status*: ${freshness}${lowestSubject && lowestSubject.percentage < 75 ? `\n\n💡 *Julie Priority Alert*: Focus on attending upcoming **${lowestSubject.name}** (${lowestSubject.percentage}%) to recover above 75%.` : ''}`;
 
           return {
             tool: toolName,
             success: true,
-            data: { overall: OFFICIAL_ATTENDANCE_OVERALL, subjects: OFFICIAL_SUBJECT_ATTENDANCE },
+            data: cached,
             message,
           };
         }
@@ -368,16 +403,33 @@ export class ToolRouter {
         // 14. GET_SUBJECT_ATTENDANCE
         // ---------------------------------------------------------------------
         case 'get_subject_attendance': {
-          const { OFFICIAL_SUBJECT_ATTENDANCE } = await import('@/core/data/userAttendance');
-          const querySub = (args.subject || '').toLowerCase();
-          const matched = OFFICIAL_SUBJECT_ATTENDANCE.find(s => 
+          const { UUERPSyncEngine, UEUERPSessionManager } = await import('@/services/integrations/uu-erp');
+          const cached = await UUERPSyncEngine.getCachedResults();
+          const freshness = UEUERPSessionManager.getFreshnessDescription();
+          const querySub = (args.subject || args.subjectCode || '').toLowerCase();
+
+          if (cached.subjects.length === 0) {
+            return {
+              tool: toolName,
+              success: false,
+              data: null,
+              message: `No synchronized attendance records found. Please connect to UU-ERP to synchronize.`,
+            };
+          }
+
+          const matched = cached.subjects.find(s =>
             s.name.toLowerCase().includes(querySub) || s.code.toLowerCase().includes(querySub)
-          ) || OFFICIAL_SUBJECT_ATTENDANCE[0];
+          ) || cached.subjects[0];
 
           const missed = matched.totalConducted - matched.totalPresent;
-          const safeMiss = Math.floor(matched.totalPresent / 0.75) - matched.totalConducted;
+          const targetStatus =
+            matched.safeMisses > 0
+              ? `✅ Safe (Can safely miss ${matched.safeMisses} more class${matched.safeMisses > 1 ? 'es' : ''})`
+              : matched.recoveryNeeded > 0
+              ? `⚠️ Critical (Must attend ${matched.recoveryNeeded} consecutive class${matched.recoveryNeeded > 1 ? 'es' : ''} to reach 75%)`
+              : 'On track (75%)';
 
-          const message = `📈 **${matched.name} (${matched.code}) Attendance:**\n\n• **Percentage**: **${matched.percentage}%**\n• **Attended**: ${matched.totalPresent} of ${matched.totalConducted} lectures\n• **Missed**: ${missed} lectures\n• **75% Target Status**: ${safeMiss >= 0 ? `✅ Safe (Can miss ${safeMiss} more classes)` : `⚠️ Critical (Must attend ${Math.abs(safeMiss)} consecutive classes)`}`;
+          const message = `📈 **${matched.name} (${matched.code}) Attendance:**\n\n• **Percentage**: **${matched.percentage}%**\n• **Attended**: ${matched.totalPresent} of ${matched.totalConducted} lectures\n• **Missed**: ${missed} lectures\n• **75% Target Status**: ${targetStatus}\n${matched.faculty ? `• **Faculty**: ${matched.faculty}\n` : ''}• **Data Status**: ${freshness}`;
 
           return {
             tool: toolName,
@@ -557,6 +609,110 @@ export class ToolRouter {
             success: true,
             data: { codeResult },
             message: codeResult || 'Code review complete.',
+          };
+        }
+
+        // ---------------------------------------------------------------------
+        // 23. GET_STUDENT (Autonomous ERP Data Access)
+        // ---------------------------------------------------------------------
+        case 'get_student': {
+          const { ERPAIDataAccessLayer } = await import('@/services/integrations/uu-erp');
+          const studentId = args.student_id || args.roll_no || 'std-1001';
+          const res = await ERPAIDataAccessLayer.getStudent(studentId);
+
+          if (res.error) {
+            return { tool: toolName, success: false, error: res.error, message: res.error };
+          }
+
+          const s = res.student;
+          const msg = `👨‍🎓 **Student Record (${s.roll_no || s.id}):**\n\n• **Name**: ${s.name}\n• **Program**: ${s.program} (Sem ${s.semester}, Sec ${s.section || 'N/A'})\n• **Email**: ${s.email}\n• **Status**: ${s.status?.toUpperCase() || 'ACTIVE'}${res.freshness}`;
+          return { tool: toolName, success: true, data: s, message: msg };
+        }
+
+        // ---------------------------------------------------------------------
+        // 24. SEARCH_STUDENTS
+        // ---------------------------------------------------------------------
+        case 'search_students': {
+          const { ERPAIDataAccessLayer } = await import('@/services/integrations/uu-erp');
+          const q = args.query || '';
+          const res = await ERPAIDataAccessLayer.searchStudents(q);
+
+          const listStr = res.students.map(s => `• **${s.name}** (${s.roll_no}) — ${s.program}, Sem ${s.semester}`).join('\n');
+          const msg = `🔍 **UU ERP Student Search Results (${res.count}):**\n\n${listStr || 'No matching students found.'}`;
+          return { tool: toolName, success: true, data: res, message: msg };
+        }
+
+        // ---------------------------------------------------------------------
+        // 25. GET_FEE_STATUS
+        // ---------------------------------------------------------------------
+        case 'get_fee_status': {
+          const { ERPAIDataAccessLayer } = await import('@/services/integrations/uu-erp');
+          const res = await ERPAIDataAccessLayer.getFeeStatus(args.student_id);
+
+          const feeItems = res.fees.map(f => `• **Semester ${f.semester}**: Total ₹${f.total_amount.toLocaleString()} | Paid: ₹${f.paid_amount.toLocaleString()} | Due: **₹${f.due_amount.toLocaleString()}** (${f.status})`).join('\n');
+          const msg = `💳 **UU ERP Official Fee Status:**\n\n${feeItems}\n\n• **Total Outstanding Due**: **₹${res.totalDue.toLocaleString()}**${res.freshness}`;
+          return { tool: toolName, success: true, data: res, message: msg };
+        }
+
+        // ---------------------------------------------------------------------
+        // 26. GET_SYNC_DIAGNOSTICS (Sync Diagnostic Agent)
+        // ---------------------------------------------------------------------
+        case 'get_sync_diagnostics': {
+          const { ERPSyncDiagnosticsService } = await import('@/services/integrations/uu-erp');
+          const q = args.query || 'Overview';
+          const answer = await ERPSyncDiagnosticsService.answerDiagnosticQuestion(q);
+
+          return { tool: toolName, success: true, data: { answer }, message: `🩺 **Julie Sync Diagnostic Agent:**\n\n${answer}` };
+        }
+
+        // ---------------------------------------------------------------------
+        // 27. EXECUTE_ERP_ACTION (Bidirectional Action Planner & Execution)
+        // ---------------------------------------------------------------------
+        case 'execute_erp_action': {
+          const { ERPBidirectionalActionService, ERPPermissionEngine } = await import('@/services/integrations/uu-erp');
+          const actor = args.actor || ERPPermissionEngine.createAdminContext();
+          const actionReq = {
+            tenantId: 'default',
+            actor,
+            action: args.action,
+            entity_type: args.entity_type,
+            entity_id: args.entity_id,
+            payload: args.payload || {},
+            reason: args.reason || 'AI conversational execution',
+            isConfirmed: args.is_confirmed || bypassConfirmation,
+          };
+
+          const plan = await ERPBidirectionalActionService.planAction(actionReq);
+
+          if (!plan.permissionGranted) {
+            return {
+              tool: toolName,
+              success: false,
+              error: 'PERMISSION_DENIED',
+              message: `⛔ **ERP Action Blocked by RBAC Permission Engine:**\n\n${plan.validationErrors?.join('\n')}`,
+            };
+          }
+
+          if (plan.requiresConfirmation) {
+            return {
+              tool: toolName,
+              success: false,
+              requiresConfirmation: true,
+              data: {
+                title: `Confirm ERP Action: ${args.action} on ${args.entity_type}`,
+                impactSummary: plan.summary,
+                plan,
+              },
+              message: `⚠️ **Action Confirmation Required:**\n\n${plan.summary}\n\nPlease explicitly confirm to execute this change on the live ERP.`,
+            };
+          }
+
+          const execResult = await ERPBidirectionalActionService.executeAction(actionReq);
+          return {
+            tool: toolName,
+            success: execResult.success,
+            data: execResult,
+            message: `⚡ **UU ERP Action Result:**\n\n${execResult.message}${execResult.auditLogId ? `\n• Audit Log ID: \`${execResult.auditLogId}\`` : ''}`,
           };
         }
 

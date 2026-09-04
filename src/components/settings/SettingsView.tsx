@@ -24,6 +24,7 @@ import { VoicePersonaModal } from '@/components/settings/VoicePersonaModal';
 import { UUERPModal } from '@/components/integrations/UUERPModal';
 import { ApiKeyModal } from '@/components/auth/ApiKeyModal';
 import { voiceService } from '@/services/voice/VoiceService';
+import { UEUERPSessionManager } from '@/services/integrations/uu-erp';
 
 interface SettingsViewProps {
   onBack?: () => void;
@@ -35,13 +36,27 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
   const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
   const [isUUERPOpen, setIsUUERPOpen] = useState(false);
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
+  const [erpState, setErpState] = useState(() => UEUERPSessionManager.getState());
+
+  React.useEffect(() => {
+    return UEUERPSessionManager.subscribe((s) => setErpState(s));
+  }, []);
 
   const currentTheme = (localStorage.getItem('julie_theme') as 'dark' | 'light') || 'dark';
   const activeVoice = voiceService.getPersona();
 
+  const erpBadge =
+    erpState === 'CONNECTED'
+      ? '● Connected'
+      : erpState === 'SESSION_EXPIRED'
+      ? '⚠️ Expired'
+      : erpState === 'SYNCING'
+      ? '⟳ Syncing'
+      : 'Not Connected';
+
   const settingsItems = [
     { id: 'api_key', label: 'Google Gemini API Key (Neural Core)', icon: Key, badge: '● Gemini 2.5' },
-    { id: 'uuerp', label: 'Uttaranchal University Cyborg-ERP', icon: Grid, badge: '● Connected' },
+    { id: 'uuerp', label: 'Uttaranchal University Cyborg-ERP', icon: Grid, badge: erpBadge },
     { id: 'assistant', label: `Assistant Voice (${activeVoice.name.split(' ')[0]})`, icon: Sparkles, badge: activeVoice.accent },
     { id: 'voice', label: 'Voice & Speech Engine Options', icon: Mic, badge: '5 Personas' },
     { id: 'firebase_auth', label: 'Firebase Account & Project (julie-7a188)', icon: Shield, badge: 'Firebase' },

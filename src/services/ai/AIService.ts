@@ -72,22 +72,49 @@ export class AIService {
       const toolRes = await ToolRouter.executeTool('get_subject_attendance', { subject: cleanQuery }, source);
       toolResults.push(toolRes);
     }
-    // 3. Overall Attendance standing (e.g. "what's my attendance", "check my attendance")
+    // 3. Overall Attendance standing (e.g. "what's my attendance", "lowest attendance", "how many classes have I attended")
     else if (
-      (qLower.includes('what') || qLower.includes('check') || qLower.includes('show') || qLower.includes('how is')) &&
-      qLower.includes('attendance') &&
+      (qLower.includes('attendance') ||
+       qLower.includes('classes have i attended') ||
+       qLower.includes('lowest attendance') ||
+       qLower.includes('attendance percentage') ||
+       qLower.includes('safe miss')) &&
       !qLower.includes('mark') &&
-      !qLower.includes('attended') &&
-      !qLower.includes('present')
+      !qLower.includes('attended my') &&
+      !qLower.includes('attended the') &&
+      !qLower.includes('attended class')
     ) {
       const toolRes = await ToolRouter.executeTool('get_attendance', {}, source);
       toolResults.push(toolRes);
     }
+    // 3b. Fees & Financial Status (e.g. "show unpaid fees", "what is my fee balance", "fee receipt")
+    else if (qLower.includes('fee') || qLower.includes('tuition') || qLower.includes('payment due') || qLower.includes('unpaid')) {
+      const toolRes = await ToolRouter.executeTool('get_fee_status', {}, source);
+      toolResults.push(toolRes);
+    }
+    // 3c. Student Profile & Directory Search
+    else if (qLower.includes('find student') || qLower.includes('search student') || qLower.includes('who is rahul') || qLower.includes('student record')) {
+      const toolRes = await ToolRouter.executeTool('search_students', { query: cleanQuery }, source);
+      toolResults.push(toolRes);
+    }
+    // 3d. Sync Health & Telemetry Diagnostics (e.g. "why is attendance not updating", "sync diagnostics", "is erp reachable")
+    else if (
+      qLower.includes('diagnostic') ||
+      qLower.includes('why is julie not') ||
+      qLower.includes('why is attendance not') ||
+      qLower.includes('sync lag') ||
+      qLower.includes('queue status') ||
+      qLower.includes('webhook status')
+    ) {
+      const toolRes = await ToolRouter.executeTool('get_sync_diagnostics', { query: cleanQuery }, source);
+      toolResults.push(toolRes);
+    }
     // 4. Mark attendance for attended/missed class
     else if (
-      qLower.includes('attended') ||
       qLower.includes('mark my attendance') ||
       qLower.includes('mark attendance') ||
+      qLower.includes('mark as attended') ||
+      qLower.includes('mark as missed') ||
       qLower.includes('present in class') ||
       qLower.includes('missed class')
     ) {

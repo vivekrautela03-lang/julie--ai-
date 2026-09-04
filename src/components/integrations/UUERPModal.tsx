@@ -1,6 +1,6 @@
 // =============================================================================
-// PROJECT JULIE — UTTARANCHAL UNIVERSITY CYBORG-ERP DIRECT CONNECT MODAL
-// Human-in-the-Loop CAPTCHA verification, encrypted session vault, zero password leakage
+// PROJECT JULIE — REAL UTTARANCHAL UNIVERSITY UU-ERP DIRECT CONNECT MODAL
+// Human-in-the-Loop Real Login + Session Detection + Zero Mock Data
 // =============================================================================
 
 import React, { useState, useEffect } from 'react';
@@ -11,19 +11,23 @@ import {
   CheckCircle2,
   RefreshCw,
   ShieldCheck,
-  Calendar,
-  BookOpen,
-  Sparkles,
-  Lock,
   User,
   LogOut,
   AlertTriangle,
-  FileText,
   Clock,
+  BookOpen,
+  ArrowRight,
 } from 'lucide-react';
-import { uuerpAdapter } from '@/services/integrations/UttaranchalUniversityERPAdapter';
-import { ERPAuthVault, type ERPAuthSession } from '@/services/integrations/ERPAuthVault';
-import { DailyERPSyncService, type DailySyncStatus } from '@/services/integrations/DailyERPSyncService';
+import {
+  UUERPBrowserSession,
+  UUERPSyncEngine,
+  UEUERPSessionManager,
+  type ERPConnectionState,
+  type UUERPSubjectAttendance,
+  type UERPOverallAttendance,
+  type UUERPStudentProfile,
+} from '@/services/integrations/uu-erp';
+import { UUERPAdminDashboard } from './UUERPAdminDashboard';
 
 interface UUERPModalProps {
   isOpen: boolean;
@@ -31,99 +35,166 @@ interface UUERPModalProps {
 }
 
 export const UUERPModal: React.FC<UUERPModalProps> = ({ isOpen, onClose }) => {
-  const [session, setSession] = useState<ERPAuthSession>(() => ERPAuthVault.getSession());
-  const [dailyStatus, setDailyStatus] = useState<DailySyncStatus>(() => DailyERPSyncService.getStatus());
-  const [studentId, setStudentId] = useState(session.studentId || 'UU21BBA1042');
-  const [password, setPassword] = useState('');
-  const [captchaCode, setCaptchaCode] = useState('');
-  const [captchaSeed, setCaptchaSeed] = useState(() => Math.floor(1000 + Math.random() * 9000).toString());
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [syncMsg, setSyncMsg] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+  const [viewMode, setViewMode] = useState<'student' | 'admin'>('student');
+  const [connectionState, setConnectionState] = useState<ERPConnectionState>(() =>
+    UEUERPSessionManager.getState()
+  );
+  const [profile, setProfile] = useState<Partial<UUERPStudentProfile> | null>(() =>
+    UEUERPSessionManager.getProfile()
+  );
+  const [overallAttendance, setOverallAttendance] = useState<UERPOverallAttendance | null>(null);
+  const [subjects, setSubjects] = useState<UUERPSubjectAttendance[]>([]);
+  const [freshness, setFreshness] = useState<string>(() =>
+    UEUERPSessionManager.getFreshnessDescription()
+  );
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<{
+    type: 'success' | 'error' | 'info';
+    text: string;
+  } | null>(null);
+
+  const isElectron = UEUERPSessionManager.isElectronEnvironment();
+
+  // Load cached or live state on modal open
+  const reloadState = async () => {
+    const currentState = UEUERPSessionManager.getState();
+    setConnectionState(currentState);
+    setProfile(UEUERPSessionManager.getProfile());
+    setFreshness(UEUERPSessionManager.getFreshnessDescription());
+
+    const cached = await UUERPSyncEngine.getCachedResults();
+    setSubjects(cached.subjects);
+    if (cached.overall && cached.overall.totalLectures > 0) {
+      setOverallAttendance(cached.overall);
+    }
+  };
 
   useEffect(() => {
     if (isOpen) {
-      const current = ERPAuthVault.getSession();
-      setSession(current);
-      setDailyStatus(DailyERPSyncService.getStatus());
-      setStudentId(current.studentId || 'UU21BBA1042');
-      refreshCaptcha();
+      reloadState();
     }
   }, [isOpen]);
 
+  // Subscribe to session state changes
+  useEffect(() => {
+    const unsubscribe = UEUERPSessionManager.subscribe((newState) => {
+      setConnectionState(newState);
+      setFreshness(UEUERPSessionManager.getFreshnessDescription());
+    });
+    return () => unsubscribe();
+  }, []);
+
   if (!isOpen) return null;
 
-  const refreshCaptcha = () => {
-    setCaptchaSeed(Math.floor(1000 + Math.random() * 9000).toString());
-    setCaptchaCode('');
-  };
-
-  const handleConnectAndSync = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!studentId.trim()) {
-      setSyncMsg({ type: 'error', text: 'Please enter your Student Roll / User ID.' });
-      return;
-    }
-
-    if (!captchaCode.trim()) {
-      setSyncMsg({ type: 'info', text: 'Please enter the 4-digit visual CAPTCHA shown below to verify your session.' });
-      return;
-    }
-
-    setIsSyncing(true);
-    setSyncMsg({ type: 'info', text: 'Authenticating with uuerp.uudoon.in & vaulting session token...' });
+  // 1. Trigger Real UU-ERP Login Window (Human-in-the-Loop)
+  const handleConnect = async () => {
+    setIsProcessing(true);
+    setStatusMessage({
+      type: 'info',
+      text: 'Opening real UU-ERP login window. Please enter your User ID, Password, and solve the CAPTCHA.',
+    });
 
     try {
-      const result = await uuerpAdapter.login(studentId, password, captchaCode);
-      const updatedSession = ERPAuthVault.getSession();
-      setSession(updatedSession);
-      setDailyStatus(DailyERPSyncService.getStatus());
-      setSyncMsg({
-        type: 'success',
-        text: `✅ Connected & Synced! Julie AI is now managing ${result.syncedClassesCount} timetable lectures in Room 304, 7 subject attendance records (60.34%), assignments, and exams.`,
-      });
-      setPassword('');
-      setCaptchaCode('');
+      const loginRes = await UUERPBrowserSession.openLoginWindow();
+      if (loginRes.success) {
+        setStatusMessage({
+          type: 'info',
+          text: 'Authentication detected! Synchronizing student academic data...',
+        });
+
+        // Trigger synchronization immediately after login
+        const syncRes = await UUERPSyncEngine.sync();
+        await reloadState();
+
+        if (syncRes.success) {
+          setStatusMessage({
+            type: 'success',
+            text: `✅ Connected! Synchronized ${syncRes.syncedSubjectsCount} subjects from official UU-ERP portal.`,
+          });
+        } else {
+          setStatusMessage({
+            type: 'info',
+            text: syncRes.message,
+          });
+        }
+      } else {
+        setStatusMessage({
+          type: 'error',
+          text: loginRes.error || 'Authentication was not completed.',
+        });
+      }
     } catch (err: any) {
-      setSyncMsg({ type: 'error', text: `Connection note: ${err.message}` });
+      setStatusMessage({
+        type: 'error',
+        text: `Connection error: ${err.message}`,
+      });
     } finally {
-      setIsSyncing(false);
+      setIsProcessing(false);
+      reloadState();
     }
   };
 
+  // 2. Manual "Sync Now"
   const handleSyncNow = async () => {
-    setIsSyncing(true);
-    setSyncMsg({ type: 'info', text: 'Retrieving live timetable, attendance & assignments...' });
+    setIsProcessing(true);
+    setStatusMessage({
+      type: 'info',
+      text: 'Fetching latest attendance and student data from uuerp.uudoon.in...',
+    });
 
     try {
-      await DailyERPSyncService.checkAndRunDailySync(true);
-      const updatedSession = ERPAuthVault.getSession();
-      setSession(updatedSession);
-      setDailyStatus(DailyERPSyncService.getStatus());
-      setSyncMsg({
-        type: 'success',
-        text: `✅ Daily 1-Time Sync Completed! Timetable & Attendance updated for today (${updatedSession.lastSyncedAt}).`,
-      });
+      const result = await UUERPSyncEngine.sync();
+      await reloadState();
+
+      if (result.success) {
+        setStatusMessage({
+          type: 'success',
+          text: result.message,
+        });
+      } else {
+        setStatusMessage({
+          type: 'error',
+          text: result.message,
+        });
+      }
     } catch (err: any) {
-      setSyncMsg({ type: 'error', text: `Sync failed: ${err.message}` });
+      setStatusMessage({
+        type: 'error',
+        text: `Sync error: ${err.message}`,
+      });
     } finally {
-      setIsSyncing(false);
+      setIsProcessing(false);
+      reloadState();
     }
   };
 
-  const handleLogout = () => {
-    uuerpAdapter.logout();
-    const updated = ERPAuthVault.getSession();
-    setSession(updated);
-    setDailyStatus(DailyERPSyncService.getStatus());
-    setSyncMsg({ type: 'info', text: 'Disconnected ERP session. Local credentials purged.' });
+  // 3. Disconnect
+  const handleDisconnect = async () => {
+    setIsProcessing(true);
+    try {
+      await UUERPBrowserSession.disconnect();
+      await reloadState();
+      setStatusMessage({
+        type: 'info',
+        text: 'UU-ERP session disconnected. Active cookies cleared.',
+      });
+    } catch (err: any) {
+      setStatusMessage({
+        type: 'error',
+        text: `Disconnect error: ${err.message}`,
+      });
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
-  const isConnected = session.status === 'connected';
+  const isConnected = connectionState === 'CONNECTED';
+  const isSessionExpired = connectionState === 'SESSION_EXPIRED';
+  const isSyncing = connectionState === 'SYNCING' || isProcessing;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xl animate-fade-in text-white select-none">
-      <div className="bg-[#080912] rounded-3xl w-full max-w-md p-6 space-y-4 shadow-2xl border border-white/10 max-h-[90vh] overflow-y-auto">
-        
+      <div className={`bg-[#080912] rounded-3xl w-full ${viewMode === 'admin' ? 'max-w-3xl' : 'max-w-md'} p-6 space-y-4 shadow-2xl border border-white/10 max-h-[90vh] overflow-y-auto transition-all`}>
         {/* Top Header */}
         <div className="flex items-center justify-between border-b border-white/10 pb-3">
           <div className="flex items-center gap-3">
@@ -134,12 +205,20 @@ export const UUERPModal: React.FC<UUERPModalProps> = ({ isOpen, onClose }) => {
               <div className="flex items-center gap-1.5">
                 <h2 className="text-sm font-black text-white leading-tight">UU-ERP | Cyborg-ERP</h2>
                 {isConnected ? (
-                  <span className="flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                  <span className="flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Connected
                   </span>
+                ) : isSessionExpired ? (
+                  <span className="flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                    <AlertTriangle className="w-2.5 h-2.5" /> Session expired
+                  </span>
+                ) : isSyncing ? (
+                  <span className="flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/30">
+                    <RefreshCw className="w-2.5 h-2.5 animate-spin" /> Synchronizing...
+                  </span>
                 ) : (
-                  <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                    Action Required
+                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-white/5">
+                    Not connected
                   </span>
                 )}
               </div>
@@ -155,229 +234,307 @@ export const UUERPModal: React.FC<UUERPModalProps> = ({ isOpen, onClose }) => {
           </button>
         </div>
 
-        {/* Direct Portal Quick Launch Button */}
-        <div className="p-3.5 rounded-2xl bg-gradient-to-r from-blue-900/30 to-sky-900/20 border border-sky-500/30 flex items-center justify-between gap-3">
-          <div className="overflow-hidden">
-            <span className="text-[10px] font-extrabold text-sky-300 uppercase tracking-wider block">
-              Official ERP Portal
-            </span>
-            <p className="text-xs font-mono text-slate-300 truncate mt-0.5">https://uuerp.uudoon.in/Account/Login_UU</p>
-          </div>
-
-          <a
-            href="https://uuerp.uudoon.in/Account/Login_UU"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="px-3 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs shrink-0 flex items-center gap-1.5 transition-all shadow-md active:scale-95"
-            title="Open official Uttaranchal University login portal"
+        {/* View Mode Switcher */}
+        <div className="flex p-1 bg-white/5 rounded-2xl border border-white/10">
+          <button
+            type="button"
+            onClick={() => setViewMode('student')}
+            className={`flex-1 py-1.5 rounded-xl font-bold text-xs transition-all ${
+              viewMode === 'student' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+            }`}
           >
-            <span>Open Login Page</span>
-            <ExternalLink className="w-3.5 h-3.5" />
-          </a>
+            Student Portal
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('admin')}
+            className={`flex-1 py-1.5 rounded-xl font-bold text-xs transition-all ${
+              viewMode === 'admin' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            Autonomous Sync Control (Admin)
+          </button>
         </div>
 
-        {/* Daily 1-Time Auto-Sync Status Card */}
-        <div className="liquid-glass rounded-2xl p-3 space-y-1.5 border border-white/10 bg-white/[0.02]">
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-              <Clock className="w-3 h-3 text-sky-400" /> Daily Auto-Sync Policy
-            </span>
-            <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-              1x / Day
-            </span>
+        {viewMode === 'admin' ? (
+          <UUERPAdminDashboard />
+        ) : (
+          <>
+
+        {/* Status Message Banner */}
+        {statusMessage && (
+          <div
+            className={`p-3 rounded-2xl text-xs font-medium flex items-start gap-2 animate-fade-in ${
+              statusMessage.type === 'success'
+                ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-300'
+                : statusMessage.type === 'error'
+                ? 'bg-rose-500/10 border border-rose-500/30 text-rose-300'
+                : 'bg-sky-500/10 border border-sky-500/30 text-sky-300'
+            }`}
+          >
+            {statusMessage.type === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+            ) : statusMessage.type === 'error' ? (
+              <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+            ) : (
+              <RefreshCw className="w-4 h-4 text-sky-400 shrink-0 mt-0.5 animate-spin" />
+            )}
+            <span>{statusMessage.text}</span>
           </div>
+        )}
 
-          <div className="flex items-center justify-between pt-1">
-            <div>
-              <p className="text-[11px] text-slate-300 font-medium">
-                {dailyStatus.isSyncedToday ? '● Synced Today' : '⚠️ Pending Today\'s Sync'}
-              </p>
-              <p className="text-[10px] text-slate-400">
-                Last: {dailyStatus.lastSyncTime || 'Today'} • Next: {dailyStatus.nextScheduledSync}
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={handleSyncNow}
-              disabled={isSyncing}
-              className="px-3 py-1.5 rounded-xl liquid-glass text-xs font-semibold text-sky-300 hover:text-white flex items-center gap-1 transition-colors border border-sky-400/20"
-            >
-              <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin' : ''}`} />
-              <span>Sync Now</span>
-            </button>
+        {/* Non-Electron Environment Warning */}
+        {!isElectron && (
+          <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs space-y-1">
+            <p className="font-bold flex items-center gap-1.5">
+              <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+              Desktop App Mode Required for Live Login
+            </p>
+            <p className="text-[11px] text-amber-300/80">
+              Direct UU-ERP authentication requires Julie&apos;s desktop Electron runtime to render the official university login window and capture session cookies.
+              Launch Julie using <code className="bg-black/40 px-1 py-0.5 rounded text-[10px]">npm run electron</code>.
+            </p>
           </div>
-        </div>
+        )}
 
-        {/* Live Synchronized Academic Status Cards */}
+        {/* ------------------------------------------------------------- */}
+        {/* VIEW 1: CONNECTED STATE                                        */}
+        {/* ------------------------------------------------------------- */}
         {isConnected && (
-          <div className="liquid-glass rounded-2xl p-3.5 space-y-2.5 border border-white/10">
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Live Synchronized Data</span>
-              <span className="text-[10px] text-emerald-400 font-mono">Last sync: {session.lastSyncedAt || 'Today'}</span>
+          <div className="space-y-3">
+            {/* Student Profile Card */}
+            <div className="p-3.5 rounded-2xl bg-gradient-to-r from-blue-900/30 to-sky-900/20 border border-sky-500/30 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold text-sky-300 uppercase tracking-wider flex items-center gap-1">
+                  <User className="w-3 h-3 text-sky-400" /> Authenticated Student
+                </span>
+                <span className="text-[10px] text-emerald-400 font-mono">● Connected</span>
+              </div>
+              <h3 className="text-sm font-bold text-white">
+                {profile?.studentName || 'Authenticated Student'}
+              </h3>
+              <p className="text-xs text-slate-300">
+                {profile?.studentId ? `ID: ${profile.studentId} • ` : ''}
+                {profile?.program || 'Uttaranchal University'}
+                {profile?.semester ? ` (Sem ${profile.semester})` : ''}
+              </p>
+              <p className="text-[10px] text-slate-400 flex items-center gap-1 pt-1">
+                <Clock className="w-3 h-3 text-slate-500" /> {freshness}
+              </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="p-2.5 rounded-xl bg-white/5 border border-white/5">
-                <p className="text-[10px] text-slate-400">Overall Attendance</p>
-                <p className="text-base font-black text-amber-400">60.34%</p>
-                <span className="text-[9px] text-slate-500">7 Subjects in Room 304</span>
+            {/* Overall Attendance Metric */}
+            {overallAttendance && (
+              <div className="p-3.5 rounded-2xl liquid-glass border border-white/10 flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                    Overall Attendance
+                  </span>
+                  <p className="text-2xl font-black text-sky-400 mt-0.5">
+                    {overallAttendance.percentage}%
+                  </p>
+                  <p className="text-[10px] text-slate-400">
+                    {overallAttendance.totalPresent} of {overallAttendance.totalLectures} lectures attended
+                  </p>
+                </div>
+                <div
+                  className={`text-xs font-bold px-3 py-1.5 rounded-xl border ${
+                    overallAttendance.percentage >= 75
+                      ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+                      : 'bg-rose-500/10 text-rose-300 border-rose-500/30'
+                  }`}
+                >
+                  {overallAttendance.percentage >= 75 ? 'Above 75% Target' : 'Below 75% Requirement'}
+                </div>
               </div>
+            )}
 
-              <div className="p-2.5 rounded-xl bg-white/5 border border-white/5">
-                <p className="text-[10px] text-slate-400">Weekly Classes</p>
-                <p className="text-base font-black text-sky-400">21 Lectures</p>
-                <span className="text-[9px] text-slate-500">Mon - Sat Timetable</span>
+            {/* Subject Breakdown List */}
+            {subjects.length > 0 && (
+              <div className="space-y-1.5">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                  Synchronized Subjects ({subjects.length})
+                </span>
+                <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                  {subjects.map((sub) => (
+                    <div
+                      key={sub.subjectId}
+                      className="p-2.5 rounded-xl bg-white/[0.03] border border-white/5 flex items-center justify-between text-xs"
+                    >
+                      <div className="overflow-hidden pr-2">
+                        <p className="font-semibold text-white truncate">{sub.name}</p>
+                        <p className="text-[10px] text-slate-400">
+                          {sub.code} • {sub.totalPresent}/{sub.totalConducted} classes
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span
+                          className={`font-mono font-bold text-xs ${
+                            sub.percentage >= 75 ? 'text-emerald-400' : 'text-amber-400'
+                          }`}
+                        >
+                          {sub.percentage}%
+                        </span>
+                        <p className="text-[9px] text-slate-500">
+                          {sub.safeMisses > 0
+                            ? `Can miss ${sub.safeMisses}`
+                            : sub.recoveryNeeded > 0
+                            ? `Need ${sub.recoveryNeeded}`
+                            : 'On track'}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
+            )}
 
-              <div className="p-2.5 rounded-xl bg-white/5 border border-white/5">
-                <p className="text-[10px] text-slate-400">Active Assignments</p>
-                <p className="text-base font-black text-purple-400">3 Pending</p>
-                <span className="text-[9px] text-slate-500">Digital Marketing & Law</span>
-              </div>
+            {/* Action Buttons: [ Sync Now ] [ Reconnect ] [ Disconnect ] */}
+            <div className="grid grid-cols-3 gap-2 pt-2">
+              <button
+                type="button"
+                onClick={handleSyncNow}
+                disabled={isSyncing}
+                className="py-2.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-md active:scale-95 disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                <span>Sync Now</span>
+              </button>
 
-              <div className="p-2.5 rounded-xl bg-white/5 border border-white/5">
-                <p className="text-[10px] text-slate-400">Mid-Term Exams</p>
-                <p className="text-base font-black text-rose-400">30 August</p>
-                <span className="text-[9px] text-slate-500">Hall A - Desk 42</span>
-              </div>
+              <button
+                type="button"
+                onClick={handleConnect}
+                disabled={isSyncing}
+                className="py-2.5 rounded-xl liquid-glass text-xs font-semibold text-sky-300 hover:text-white flex items-center justify-center gap-1 transition-colors border border-sky-400/20"
+              >
+                <span>Reconnect</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDisconnect}
+                disabled={isSyncing}
+                className="py-2.5 rounded-xl bg-white/5 hover:bg-rose-500/20 text-xs font-semibold text-slate-400 hover:text-rose-300 transition-colors flex items-center justify-center gap-1"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Disconnect</span>
+              </button>
             </div>
           </div>
         )}
 
-        {/* Connect / Reconnect Form with Human-in-the-Loop CAPTCHA */}
-        <form onSubmit={handleConnectAndSync} className="space-y-3 pt-1">
-          <div>
-            <label className="text-xs font-semibold text-slate-300 block mb-1">
-              Student Roll / User ID
-            </label>
-            <div className="relative flex items-center">
-              <User className="w-4 h-4 text-slate-500 absolute left-3" />
-              <input
-                type="text"
-                value={studentId}
-                onChange={e => setStudentId(e.target.value)}
-                placeholder="e.g. UU21BBA1042"
-                className="w-full liquid-glass rounded-2xl pl-9 pr-3 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-400/50"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="text-xs font-semibold text-slate-300 block mb-1">
-              Portal Password
-            </label>
-            <div className="relative flex items-center">
-              <Lock className="w-4 h-4 text-slate-500 absolute left-3" />
-              <input
-                type="password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                placeholder="••••••••••••"
-                className="w-full liquid-glass rounded-2xl pl-9 pr-3 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-400/50"
-              />
-            </div>
-            <p className="text-[9px] text-slate-500 mt-1 flex items-center gap-1">
-              <ShieldCheck className="w-3 h-3 text-emerald-400 shrink-0" />
-              Encrypted locally. Passwords are never sent to the AI Agent.
-            </p>
-          </div>
-
-          {/* Official Visual CAPTCHA Box (Human-in-the-Loop Verification) */}
-          <div className="liquid-glass rounded-2xl p-3 space-y-2 border border-sky-400/30 bg-sky-500/5">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-sky-300 flex items-center gap-1.5">
-                <ShieldCheck className="w-3.5 h-3.5 text-sky-400" /> Human Security Verification
-              </label>
-              <button
-                type="button"
-                onClick={refreshCaptcha}
-                className="text-[10px] text-sky-400 hover:text-white flex items-center gap-1 transition-colors"
-                title="Click to refresh CAPTCHA challenge"
-              >
-                <RefreshCw className="w-3 h-3" /> Refresh
-              </button>
-            </div>
-
-            <div className="flex items-center gap-3">
-              {/* Visual CAPTCHA Box */}
-              <div className="h-10 px-4 rounded-xl bg-slate-900 border border-slate-700 flex items-center justify-center select-none shadow-inner">
-                <span className="font-mono text-lg font-black tracking-widest text-emerald-400 italic line-through decoration-slate-600">
-                  {captchaSeed}
-                </span>
+        {/* ------------------------------------------------------------- */}
+        {/* VIEW 2: SESSION EXPIRED STATE                                 */}
+        {/* ------------------------------------------------------------- */}
+        {isSessionExpired && (
+          <div className="space-y-3">
+            <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs space-y-2">
+              <div className="flex items-center gap-2 font-bold text-sm text-amber-300">
+                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>UU-ERP Session Expired</span>
               </div>
-
-              {/* User Input */}
-              <input
-                type="text"
-                value={captchaCode}
-                onChange={e => setCaptchaCode(e.target.value)}
-                placeholder="Enter 4 digits"
-                maxLength={6}
-                className="flex-1 liquid-glass rounded-xl px-3 py-2 text-center text-xs font-mono font-bold tracking-widest text-white placeholder-slate-500 focus:outline-none focus:border-sky-400"
-              />
+              <p className="text-[11px] text-amber-200/90 leading-relaxed">
+                Your university authentication session has timed out on the ERP server.
+                Julie is preserving your last synchronized attendance data. Reconnect to resume live synchronization.
+              </p>
+              <p className="text-[10px] text-slate-400 flex items-center gap-1">
+                <Clock className="w-3 h-3 text-slate-500" /> {freshness}
+              </p>
             </div>
-            <p className="text-[9px] text-slate-400">
-              Enter the visual code above to generate your authorized encrypted session token.
-            </p>
-          </div>
 
-          {/* Sync Status Banner */}
-          {syncMsg && (
-            <div
-              className={`p-3 rounded-2xl text-xs font-medium flex items-start gap-2 animate-fade-in ${
-                syncMsg.type === 'success'
-                  ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-300'
-                  : syncMsg.type === 'error'
-                  ? 'bg-rose-500/10 border border-rose-500/30 text-rose-300'
-                  : 'bg-sky-500/10 border border-sky-500/30 text-sky-300'
-              }`}
-            >
-              {syncMsg.type === 'success' ? (
-                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-              ) : (
-                <AlertTriangle className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
-              )}
-              <span>{syncMsg.text}</span>
-            </div>
-          )}
-
-          {/* Actions */}
-          <div className="space-y-2 pt-1">
-            <button
-              type="submit"
-              disabled={isSyncing}
-              className="w-full py-3 rounded-2xl bg-gradient-to-r from-blue-600 to-sky-500 hover:from-blue-500 hover:to-sky-400 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(56,189,248,0.4)] active:scale-95 transition-all"
-            >
-              <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
-              <span>{isSyncing ? 'Authenticating & Vaulting...' : isConnected ? 'Re-Authenticate & Sync' : 'Connect & Authorize ERP'}</span>
-            </button>
-
-            {isConnected && (
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleSyncNow}
-                  disabled={isSyncing}
-                  className="flex-1 py-2.5 rounded-xl liquid-glass text-xs font-semibold text-sky-300 hover:text-white flex items-center justify-center gap-1.5 transition-colors"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-                  <span>Sync Live Data Now</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  className="py-2.5 px-3 rounded-xl bg-white/5 hover:bg-rose-500/20 text-xs font-semibold text-slate-400 hover:text-rose-300 transition-colors flex items-center justify-center gap-1"
-                  title="Disconnect & Purge Session"
-                >
-                  <LogOut className="w-3.5 h-3.5" />
-                  <span>Disconnect</span>
-                </button>
+            {/* Preserved Cached Attendance Snapshot */}
+            {subjects.length > 0 && (
+              <div className="p-3 rounded-2xl liquid-glass border border-white/10 space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase">
+                    Preserved Cache ({subjects.length} Subjects)
+                  </span>
+                  {overallAttendance && (
+                    <span className="font-mono font-bold text-sky-400">
+                      {overallAttendance.percentage}% Overall
+                    </span>
+                  )}
+                </div>
               </div>
             )}
+
+            {/* Action: [ Reconnect UU-ERP ] */}
+            <button
+              type="button"
+              onClick={handleConnect}
+              disabled={isSyncing}
+              className="w-full py-3 rounded-2xl bg-gradient-to-r from-amber-600 to-yellow-500 hover:from-amber-500 hover:to-yellow-400 text-slate-950 font-black text-xs flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all"
+            >
+              <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
+              <span>Reconnect UU-ERP (Solve CAPTCHA)</span>
+            </button>
           </div>
-        </form>
+        )}
+
+        {/* ------------------------------------------------------------- */}
+        {/* VIEW 3: DISCONNECTED STATE                                     */}
+        {/* ------------------------------------------------------------- */}
+        {!isConnected && !isSessionExpired && (
+          <div className="space-y-3.5">
+            <div className="p-3.5 rounded-2xl liquid-glass border border-white/10 space-y-2">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                Official University Connection
+              </span>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Connect Julie directly to your Uttaranchal University Cyborg-ERP account to synchronize your real-time attendance, safe misses, and academic roster.
+              </p>
+
+              <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/5 space-y-1.5 text-[11px] text-slate-400">
+                <p className="flex items-center gap-1.5 text-slate-300 font-medium">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  Real Human Authentication Flow:
+                </p>
+                <ol className="list-decimal list-inside pl-1 space-y-1 text-[10px]">
+                  <li>Julie opens the official login page (<code className="text-sky-300">uuerp.uudoon.in</code>).</li>
+                  <li>You personally enter your User ID &amp; Password.</li>
+                  <li>You solve the official visual CAPTCHA and click Login.</li>
+                  <li>Julie detects authentication and synchronizes your records.</li>
+                </ol>
+              </div>
+            </div>
+
+            {/* Direct Official Link */}
+            <div className="flex items-center justify-between text-[10px] text-slate-500 px-1">
+              <span>Portal URL: https://uuerp.uudoon.in/Account/Login_UU</span>
+              <a
+                href="https://uuerp.uudoon.in/Account/Login_UU"
+                target="_blank"
+                rel="noreferrer"
+                className="text-sky-400 hover:text-sky-300 flex items-center gap-0.5"
+              >
+                <span>View</span>
+                <ExternalLink className="w-2.5 h-2.5" />
+              </a>
+            </div>
+
+            {/* Action: [ Connect UU-ERP ] */}
+            <button
+              type="button"
+              onClick={handleConnect}
+              disabled={isSyncing}
+              className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-blue-600 to-sky-500 hover:from-blue-500 hover:to-sky-400 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-[0_0_25px_rgba(56,189,248,0.4)] active:scale-95 transition-all disabled:opacity-50"
+            >
+              {isSyncing ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <span>Connecting with UU-ERP...</span>
+                </>
+              ) : (
+                <>
+                  <span>Connect UU-ERP</span>
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
+            </button>
+          </div>
+        )}
+          </>
+        )}
       </div>
     </div>
   );

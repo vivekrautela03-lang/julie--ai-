@@ -39,6 +39,7 @@ import { uuerpAdapter } from '@/services/integrations/UttaranchalUniversityERPAd
 import type { Task } from '@/core/types';
 import { DailyERPSyncService } from '@/services/integrations/DailyERPSyncService';
 import { voiceService } from '@/services/voice/VoiceService';
+import { UEUERPSessionManager, UUERPSyncEngine } from '@/services/integrations/uu-erp';
 
 interface DashboardViewProps {
   onBack?: () => void;
@@ -66,6 +67,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   // Immediate Sync State
   const [isManualSyncing, setIsManualSyncing] = useState(false);
   const [syncNotice, setSyncNotice] = useState<string | null>(null);
+  const [erpState, setErpState] = useState(() => UEUERPSessionManager.getState());
+
+  useEffect(() => {
+    return UEUERPSessionManager.subscribe((state) => setErpState(state));
+  }, []);
 
   // New task input state
   const [newTaskTitle, setNewTaskTitle] = useState('');
@@ -79,8 +85,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     setIsManualSyncing(true);
     setSyncNotice('Connecting to UU-ERP & refreshing data...');
     try {
-      await DailyERPSyncService.checkAndRunDailySync(true);
-      setSyncNotice('✅ UU-ERP Synchronized! Timetable, Attendance (60.34%) & Assignments Updated.');
+      const res = await UUERPSyncEngine.sync();
+      setSyncNotice(res.message);
       setTimeout(() => setSyncNotice(null), 5000);
     } catch (e: any) {
       setSyncNotice(`Sync note: ${e.message}`);
@@ -296,7 +302,23 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <GraduationCap className="w-4 h-4" />
           </div>
           <p className="text-[11px] font-bold text-white leading-tight">UU-ERP</p>
-          <p className="text-[9px] text-emerald-400 mt-0.5">● Connected</p>
+          <p className={`text-[9px] mt-0.5 font-medium ${
+            erpState === 'CONNECTED'
+              ? 'text-emerald-400'
+              : erpState === 'SESSION_EXPIRED'
+              ? 'text-amber-400'
+              : erpState === 'SYNCING'
+              ? 'text-sky-400'
+              : 'text-slate-400'
+          }`}>
+            {erpState === 'CONNECTED'
+              ? '● Connected'
+              : erpState === 'SESSION_EXPIRED'
+              ? '⚠ Expired'
+              : erpState === 'SYNCING'
+              ? '⟳ Syncing'
+              : 'Not Connected'}
+          </p>
         </button>
 
         <button

@@ -46,11 +46,11 @@ export class DailyERPSyncService {
 
     return {
       isEnabled: true,
-      lastSyncDate: today,
-      lastSyncTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      isSyncedToday: true,
-      nextScheduledSync: 'Tomorrow at 06:00 AM',
-      syncCount: 1,
+      lastSyncDate: null,
+      lastSyncTime: null,
+      isSyncedToday: false,
+      nextScheduledSync: 'Connect to begin',
+      syncCount: 0,
     };
   }
 
@@ -96,7 +96,7 @@ export class DailyERPSyncService {
         id: `notif-daily-erp-${Date.now()}`,
         user_id: CURRENT_USER_ID,
         title: '🎓 Daily UU-ERP Data Synchronized',
-        body: `Julie updated your timetable (${result.syncedClassesCount} classes in Room 304) and attendance standing (60.34%).`,
+        body: result.detectedChanges[0] || `Julie synchronized ${result.syncedAttendanceCount} attendance records across ${result.syncedSubjectsCount} subjects.`,
         category: 'Daily Briefing',
         urgency_level: 'Normal',
         is_read: false,
