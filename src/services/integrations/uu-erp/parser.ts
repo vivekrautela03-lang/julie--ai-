@@ -13,10 +13,10 @@ import type {
 
 export class UUERPParser {
   /**
-   * Parses the HTML string of /Web_StudentAcademic/Cyborg_StudentAttendanceAcademic
+   * Parses the HTML string or copied plain-text of /Web_StudentAcademic/Cyborg_StudentAttendanceAcademic
    */
-  static parseAttendancePage(html: string): UUERPExtractedData {
-    if (!html || typeof html !== 'string') {
+  static parseAttendancePage(rawContent: string): UUERPExtractedData {
+    if (!rawContent || typeof rawContent !== 'string') {
       return {
         subjects: [],
         rawHtmlLength: 0,
@@ -24,12 +24,215 @@ export class UUERPParser {
       };
     }
 
-    // In browser or Electron renderer, DOMParser is available
-    if (typeof DOMParser !== 'undefined') {
-      return this.parseWithDOM(html);
-    } else {
-      return this.parseWithRegex(html);
+    const trimmed = rawContent.trim();
+    const isHtml = trimmed.includes('<table') || trimmed.includes('<html') || trimmed.includes('<tr') || trimmed.includes('<div') || trimmed.includes('<body');
+
+    if (isHtml) {
+      // In browser or Electron renderer, DOMParser is available
+      const parsed = typeof DOMParser !== 'undefined'
+        ? this.parseWithDOM(trimmed)
+        : this.parseWithRegex(trimmed);
+
+      // If HTML parsing extracted subjects, return it
+      if (parsed.subjects && parsed.subjects.length > 0) {
+        return parsed;
+      }
     }
+
+    // Fallback or direct plain-text parser (for copied text/tables from browser)
+    const textParsed = this.parseFromPlainText(trimmed);
+    if (textParsed.subjects && textParsed.subjects.length > 0) {
+      return textParsed;
+    }
+
+    return {
+      subjects: [],
+      rawHtmlLength: rawContent.length,
+      extractedAt: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * Robust parser for plain text / tab-separated / space-separated attendance records
+   * copied directly from the UU-ERP student portal page.
+   */
+  static parseFromPlainText(text: string): UUERPExtractedData {
+    const subjects: UUERPSubjectAttendance[] = [];
+    let overall: UERPOverallAttendance | undefined;
+
+    // 1. Extract Profile Info from Text
+    const profile: Partial<UUERPStudentProfile> = {
+      university: 'Uttaranchal University',
+    };
+
+    const nameMatch = text.match(/(?:Student Name|Name|Student)\s*[:\-]\s*([A-Za-z\s.]+?)(?:\r?\n|$)/i);
+    if (nameMatch) profile.studentName = nameMatch[1].trim();
+
+    const rollMatch = text.match(/(?:Student ID|Roll No|Enrollment No|Enroll No|Registration No)\s*[:\-]\s*([A-Za-z0-9]+?)(?:\r?\n|$)/i);
+    if (rollMatch) profile.studentId = rollMatch[1].trim();
+
+    const progMatch = text.match(/(?:Program|Course|Branch|Degree)\s*[:\-]\s*([A-Za-z0-9\s().-]+?)(?:\r?\n|$)/i);
+    if (progMatch) profile.program = progMatch[1].trim();
+
+    const semMatch = text.match(/(?:Semester|Sem)\s*[:\-]\s*(\d+)/i);
+    if (semMatch) profile.semester = parseInt(semMatch[1], 10);
+
+    // 2. Process Lines
+    const lines = text.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0);
+
+    for (const line of lines) {
+      const lower = line.toLowerCase();
+
+      // Skip header lines
+      if (
+        lower.includes('subject code') &&
+        lower.includes('subject name')
+      ) {
+        continue;
+      }
+
+      // Check for Overall / Total summary line
+      if (
+        (lower.includes('total') || lower.includes('overall') || lower.includes('grand')) &&
+        (lower.includes('%') || /\d+\s*\/\s*\d+/.test(line) || /\d+[\t\s]+\d+/.test(line))
+      ) {
+        const nums = line.match(/\d+(?:\.\d+)?/g);
+        if (nums && nums.length >= 2) {
+          const numbers = nums.map(Number);
+          const totalLectures = numbers[0];
+          const totalPresent = numbers[1];
+          const percentage = numbers.length >= 3
+            ? numbers[2]
+            : totalLectures > 0
+            ? parseFloat(((totalPresent / totalLectures) * 100).toFixed(2))
+            : 0;
+
+          overall = {
+            totalLectures,
+            totalPresent,
+            percentage,
+          };
+          continue;
+        }
+      }
+
+      // Detect table row: Split by tab or multiple spaces / separators
+      const parts = line.split(/\t+| {2,}| \| /).map((p) => p.trim()).filter(Boolean);
+
+      // We need either a tab-split line or regex matching standard row pattern
+      if (parts.length >= 4) {
+        // Find subject code, e.g. TCS-601, BBA-201, CS101, etc.
+        let codeIdx = parts.findIndex((p) => /^[A-Z]{2,6}[-\s]?[0-9]{2,4}[A-Z]?$/i.test(p));
+        let nameIdx = -1;
+        let conductedIdx = -1;
+        let presentIdx = -1;
+        let pctIdx = -1;
+
+        // If no strict code format, look for numeric indices at the end
+        const numericIndices = parts
+          .map((p, idx) => ({ idx, val: parseFloat(p.replace('%', '')) }))
+          .filter((item) => !isNaN(item.val));
+
+        if (numericIndices.length >= 2) {
+          // Last 2 or 3 numbers are usually conducted, present, percentage
+          if (numericIndices.length >= 3 && parts[numericIndices[numericIndices.length - 1].idx].includes('%')) {
+            pctIdx = numericIndices[numericIndices.length - 1].idx;
+            presentIdx = numericIndices[numericIndices.length - 2].idx;
+            conductedIdx = numericIndices[numericIndices.length - 3].idx;
+          } else if (numericIndices.length >= 2) {
+            presentIdx = numericIndices[numericIndices.length - 1].idx;
+            conductedIdx = numericIndices[numericIndices.length - 2].idx;
+          }
+
+          if (codeIdx === -1 && conductedIdx > 1) {
+            codeIdx = 1; // Often index 0 is S.No, index 1 is Code
+          }
+
+          nameIdx = codeIdx !== -1 && conductedIdx > codeIdx + 1 ? codeIdx + 1 : 1;
+
+          const subCode = codeIdx !== -1 && codeIdx < parts.length ? parts[codeIdx] : `SUB-${subjects.length + 1}`;
+          const subName = nameIdx !== -1 && nameIdx < parts.length ? parts[nameIdx] : parts[0];
+          const faculty = conductedIdx > nameIdx + 1 ? parts[nameIdx + 1] : '';
+          const conducted = conductedIdx !== -1 ? parseInt(parts[conductedIdx], 10) : 0;
+          const present = presentIdx !== -1 ? parseInt(parts[presentIdx], 10) : 0;
+          const pct = pctIdx !== -1
+            ? parseFloat(parts[pctIdx].replace('%', ''))
+            : conducted > 0
+            ? parseFloat(((present / conducted) * 100).toFixed(2))
+            : 0;
+
+          if (subName && subName.length >= 2 && !isNaN(conducted) && conducted >= 0) {
+            const safeMisses = Math.max(0, Math.floor(present / 0.75) - conducted);
+            const recoveryNeeded = pct < 75 ? Math.ceil((0.75 * conducted - present) / 0.25) : 0;
+
+            subjects.push({
+              subjectId: subCode.toLowerCase().replace(/[^a-z0-9]/g, '-') || `uu-${subjects.length + 1}`,
+              code: subCode,
+              name: subName,
+              faculty,
+              totalConducted: conducted,
+              totalPresent: present,
+              percentage: isNaN(pct) ? 0 : pct,
+              safeMisses,
+              recoveryNeeded,
+            });
+            continue;
+          }
+        }
+      }
+
+      // Regex fallback for single line with format: Code Name Faculty Conducted Attended Pct
+      const rowRegex = /([A-Z]{2,6}[-\s]?[0-9]{2,4}[A-Z]?)\s+([A-Za-z0-9\s&,.-]+?)\s+(\d+)\s+(\d+)\s+(\d+(?:\.\d+)?%?)/i;
+      const match = line.match(rowRegex);
+      if (match) {
+        const subCode = match[1].trim();
+        const subName = match[2].trim();
+        const conducted = parseInt(match[3], 10);
+        const present = parseInt(match[4], 10);
+        const pctVal = parseFloat(match[5].replace('%', ''));
+        const pct = isNaN(pctVal)
+          ? conducted > 0
+            ? parseFloat(((present / conducted) * 100).toFixed(2))
+            : 0
+          : pctVal;
+
+        const safeMisses = Math.max(0, Math.floor(present / 0.75) - conducted);
+        const recoveryNeeded = pct < 75 ? Math.ceil((0.75 * conducted - present) / 0.25) : 0;
+
+        subjects.push({
+          subjectId: subCode.toLowerCase().replace(/[^a-z0-9]/g, '-') || `uu-${subjects.length + 1}`,
+          code: subCode,
+          name: subName,
+          faculty: '',
+          totalConducted: conducted,
+          totalPresent: present,
+          percentage: pct,
+          safeMisses,
+          recoveryNeeded,
+        });
+      }
+    }
+
+    // Compute overall if not found
+    if (!overall && subjects.length > 0) {
+      const sumConducted = subjects.reduce((sum, s) => sum + s.totalConducted, 0);
+      const sumPresent = subjects.reduce((sum, s) => sum + s.totalPresent, 0);
+      const percentage = sumConducted > 0 ? parseFloat(((sumPresent / sumConducted) * 100).toFixed(2)) : 0;
+
+      overall = {
+        totalLectures: sumConducted,
+        totalPresent: sumPresent,
+        percentage,
+      };
+    }
+
+    return {
+      profile,
+      overall,
+      subjects,
+      rawHtmlLength: text.length,
+      extractedAt: new Date().toISOString(),
+    };
   }
 
   /**

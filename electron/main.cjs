@@ -101,6 +101,8 @@ function setupUUERPIPC() {
 
       const checkAuthNavigation = async (currentUrl) => {
         try {
+          if (authenticated) return;
+
           const parsed = new URL(currentUrl);
           const pathname = parsed.pathname.toLowerCase();
 
@@ -119,11 +121,43 @@ function setupUUERPIPC() {
             // Fetch session cookies to confirm session validity
             const cookies = await erpSession.cookies.get({ domain: 'uuerp.uudoon.in' });
 
-            // Notify renderer of successful login
+            let attendanceHtml = '';
+            // If we are not already on attendance page, navigate to it directly
+            if (!pathname.includes('cyborg_studentattendanceacademic')) {
+              try {
+                console.log('[UU-ERP] Auto-navigating to attendance module:', UU_ATTENDANCE_URL);
+                if (erpLoginWindow && !erpLoginWindow.isDestroyed()) {
+                  await erpLoginWindow.loadURL(UU_ATTENDANCE_URL);
+                  await new Promise((r) => setTimeout(r, 1200));
+                  attendanceHtml = await erpLoginWindow.webContents.executeJavaScript(
+                    'document.documentElement.outerHTML'
+                  );
+                  console.log(
+                    '[UU-ERP] Extracted attendance HTML length:',
+                    attendanceHtml ? attendanceHtml.length : 0
+                  );
+                }
+              } catch (navErr) {
+                console.warn('[UU-ERP] Auto attendance navigation note:', navErr.message);
+              }
+            } else {
+              try {
+                if (erpLoginWindow && !erpLoginWindow.isDestroyed()) {
+                  attendanceHtml = await erpLoginWindow.webContents.executeJavaScript(
+                    'document.documentElement.outerHTML'
+                  );
+                }
+              } catch (e) {
+                console.warn('[UU-ERP] Direct HTML extract note:', e.message);
+              }
+            }
+
+            // Notify renderer of successful login + extracted HTML
             if (mainWindow && !mainWindow.isDestroyed()) {
               mainWindow.webContents.send('uuerp:login-success', {
                 url: currentUrl,
                 cookiesCount: cookies.length,
+                html: attendanceHtml,
               });
             }
 
@@ -132,9 +166,9 @@ function setupUUERPIPC() {
               if (erpLoginWindow && !erpLoginWindow.isDestroyed()) {
                 erpLoginWindow.close();
               }
-            }, 1200);
+            }, 1000);
 
-            resolve({ success: true, url: currentUrl });
+            resolve({ success: true, url: currentUrl, html: attendanceHtml });
           }
         } catch (err) {
           console.error('[UU-ERP] Auth navigation check error:', err);
@@ -192,13 +226,49 @@ function setupUUERPIPC() {
         };
       }
 
-      return {
-        success: true,
-        redirectedToLogin: false,
-        status: response.status,
-        finalUrl: response.url,
-        html,
-      };
+      // If net.fetch returned valid HTML
+      if (html && html.length > 200 && !isRedirectedToLogin) {
+        return {
+          success: true,
+          redirectedToLogin: false,
+          status: response.status,
+          finalUrl: response.url,
+          html,
+        };
+      }
+
+      // Fallback: Use headless window with active partition to render and extract DOM
+      const backgroundWin = new BrowserWindow({
+        show: false,
+        width: 800,
+        height: 600,
+        webPreferences: {
+          partition: UU_SESSION_PARTITION,
+          nodeIntegration: false,
+          contextIsolation: true,
+        },
+      });
+
+      try {
+        await backgroundWin.loadURL(urlToFetch);
+        await new Promise((r) => setTimeout(r, 1000));
+        const domHtml = await backgroundWin.webContents.executeJavaScript('document.documentElement.outerHTML');
+        backgroundWin.destroy();
+
+        return {
+          success: true,
+          redirectedToLogin: false,
+          status: 200,
+          finalUrl: urlToFetch,
+          html: domHtml,
+        };
+      } catch (domErr) {
+        backgroundWin.destroy();
+        return {
+          success: false,
+          error: domErr.message,
+        };
+      }
     } catch (err) {
       console.error('[UU-ERP] fetch-page error:', err);
       return {

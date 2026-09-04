@@ -9,6 +9,7 @@ import { UEUERPSessionManager } from './session';
 export interface LoginResult {
   success: boolean;
   url?: string;
+  html?: string;
   error?: string;
 }
 
@@ -50,7 +51,7 @@ export class UUERPBrowserSession {
 
       if (result.success) {
         UEUERPSessionManager.setState('CONNECTED');
-        return { success: true, url: result.url };
+        return { success: true, url: result.url, html: result.html };
       } else {
         UEUERPSessionManager.setState(
           'DISCONNECTED',

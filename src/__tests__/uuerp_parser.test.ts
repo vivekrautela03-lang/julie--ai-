@@ -111,4 +111,40 @@ describe('UUERPParser — Real Cyborg-ERP HTML Parser', () => {
     expect(emptyData.subjects).toEqual([]);
     expect(emptyData.rawHtmlLength).toBe(0);
   });
+
+  it('correctly parses copied tab-separated or plain-text table data', () => {
+    const samplePlainText = `
+Student Name : Vivek Rautela
+Roll No : UU21BBA1042
+Program : Bachelor of Business Administration
+Semester : 4
+
+S.No.	Subject Code	Subject Name	Faculty Name	Total Conducted	Attended	Percentage
+1	TCS-601	Compiler Design	Dr. Sharma	30	25	83.33%
+2	TCS-602	Computer Networks	Prof. Gupta	28	22	78.57%
+3	TCS-603	Web Technologies	Dr. Verma	32	20	62.5%
+Total Lectures: 90	Total Attended: 67	74.44%
+    `;
+
+    const parsed = UUERPParser.parseAttendancePage(samplePlainText);
+    expect(parsed.profile?.studentName).toBe('Vivek Rautela');
+    expect(parsed.profile?.studentId).toBe('UU21BBA1042');
+    expect(parsed.subjects.length).toBe(3);
+
+    const sub1 = parsed.subjects.find((s) => s.code === 'TCS-601');
+    expect(sub1).toBeDefined();
+    expect(sub1?.name).toBe('Compiler Design');
+    expect(sub1?.totalConducted).toBe(30);
+    expect(sub1?.totalPresent).toBe(25);
+    expect(sub1?.percentage).toBe(83.33);
+
+    const sub3 = parsed.subjects.find((s) => s.code === 'TCS-603');
+    expect(sub3).toBeDefined();
+    expect(sub3?.percentage).toBe(62.5);
+    expect(sub3?.recoveryNeeded).toBeGreaterThan(0);
+
+    expect(parsed.overall).toBeDefined();
+    expect(parsed.overall?.totalLectures).toBe(90);
+    expect(parsed.overall?.totalPresent).toBe(67);
+  });
 });

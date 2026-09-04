@@ -16,6 +16,7 @@ import {
   RefreshCw,
   ExternalLink,
   Zap,
+  Clipboard,
 } from 'lucide-react';
 import { ConnectedAppsModal } from '@/components/integrations/ConnectedAppsModal';
 import { FirebaseAuthModal } from '@/components/auth/FirebaseAuthModal';
@@ -60,11 +61,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
       if (loginRes.success) {
         setSyncStatusText('Authenticated! Collecting all real student records & syncing...');
         
-        // 2. Fetch and synchronize all entities
-        const erpSync = await UUERPSyncEngine.sync();
+        // 2. Fetch and synchronize all entities (using extracted HTML if available)
+        const erpSync = await UUERPSyncEngine.sync(loginRes.html);
         const autoSync = await ERPIncrementalSyncEngine.syncAllEntities('default', true);
 
-        setSyncStatusText(`✅ Synced! ${erpSync.syncedSubjectsCount} subjects & ${autoSync.totalSyncedRecords} ERP records collected.`);
+        if (erpSync.syncedSubjectsCount > 0) {
+          setSyncStatusText(`✅ Synced! ${erpSync.syncedSubjectsCount} subjects & ${autoSync.totalSyncedRecords} ERP records collected.`);
+        } else {
+          setSyncStatusText(erpSync.message || 'ERP window authenticated. Use Paste Sync if table is not auto-loaded.');
+        }
         setTimeout(() => setSyncStatusText(null), 6000);
       } else {
         setSyncStatusText(`Note: ${loginRes.error || 'Authentication canceled'}`);
@@ -72,6 +77,35 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
       }
     } catch (err: any) {
       setSyncStatusText(`Sync error: ${err.message}`);
+    } finally {
+      setIsDirectSyncing(false);
+    }
+  };
+
+  const handleClipboardSync = async () => {
+    setIsDirectSyncing(true);
+    setSyncStatusText('Reading attendance data from clipboard...');
+    try {
+      if (!navigator.clipboard?.readText) {
+        setIsUUERPOpen(true);
+        setSyncStatusText('Clipboard read not supported. Opened sync modal to paste directly.');
+        return;
+      }
+      const text = await navigator.clipboard.readText();
+      if (!text || text.trim().length === 0) {
+        setSyncStatusText('Clipboard is empty. Copy the table from UU-ERP attendance page first.');
+        setTimeout(() => setSyncStatusText(null), 4000);
+        return;
+      }
+      const result = await UUERPSyncEngine.syncFromRawContent(text);
+      if (result.success && result.syncedSubjectsCount > 0) {
+        setSyncStatusText(`✅ Synced ${result.syncedSubjectsCount} subjects from clipboard!`);
+      } else {
+        setSyncStatusText(result.message || 'Could not parse attendance table from clipboard.');
+      }
+      setTimeout(() => setSyncStatusText(null), 6000);
+    } catch (err: any) {
+      setSyncStatusText(`Clipboard error: ${err.message}. Open Control Center to paste manually.`);
     } finally {
       setIsDirectSyncing(false);
     }
@@ -175,33 +209,45 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
           </div>
         )}
 
-        <div className="flex items-center gap-2 pt-1">
-          <button
-            type="button"
-            onClick={handleDirectRealERPSync}
-            disabled={isDirectSyncing}
-            className="flex-1 py-3 px-4 rounded-2xl bg-gradient-to-r from-blue-600 via-sky-500 to-indigo-600 hover:from-blue-500 hover:to-sky-400 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(56,189,248,0.35)] active:scale-95 transition-all disabled:opacity-50"
-          >
-            {isDirectSyncing ? (
-              <>
-                <RefreshCw className="w-4 h-4 animate-spin" />
-                <span>Syncing Live ERP Data...</span>
-              </>
-            ) : (
-              <>
-                <Zap className="w-4 h-4 text-amber-300 fill-amber-300" />
-                <span>Open Real ERP & Sync All Data</span>
-              </>
-            )}
-          </button>
+        <div className="space-y-2 pt-1">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleDirectRealERPSync}
+              disabled={isDirectSyncing}
+              className="flex-1 py-3 px-4 rounded-2xl bg-gradient-to-r from-blue-600 via-sky-500 to-indigo-600 hover:from-blue-500 hover:to-sky-400 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(56,189,248,0.35)] active:scale-95 transition-all disabled:opacity-50"
+            >
+              {isDirectSyncing ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <span>Syncing Live ERP Data...</span>
+                </>
+              ) : (
+                <>
+                  <Zap className="w-4 h-4 text-amber-300 fill-amber-300" />
+                  <span>Open Real ERP & Auto-Sync</span>
+                </>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsUUERPOpen(true)}
+              className="p-3 rounded-2xl bg-white/10 hover:bg-white/15 border border-white/15 text-slate-200 hover:text-white flex items-center justify-center transition-all"
+              title="Open Full Control Center"
+            >
+              <Grid className="w-4 h-4" />
+            </button>
+          </div>
 
           <button
             type="button"
-            onClick={() => setIsUUERPOpen(true)}
-            className="p-3 rounded-2xl bg-white/10 hover:bg-white/15 border border-white/15 text-slate-200 hover:text-white flex items-center justify-center transition-all"
-            title="Open Full Control Center"
+            onClick={handleClipboardSync}
+            disabled={isDirectSyncing}
+            className="w-full py-2 px-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white font-medium text-[11px] flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50"
           >
-            <Grid className="w-4 h-4" />
+            <Clipboard className="w-3.5 h-3.5 text-sky-400" />
+            <span>📋 Paste Copied Attendance Table &amp; Instant Sync</span>
           </button>
         </div>
       </div>

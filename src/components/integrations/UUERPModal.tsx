@@ -17,6 +17,8 @@ import {
   Clock,
   BookOpen,
   ArrowRight,
+  Clipboard,
+  FileText,
 } from 'lucide-react';
 import {
   UUERPBrowserSession,
@@ -52,6 +54,8 @@ export const UUERPModal: React.FC<UUERPModalProps> = ({ isOpen, onClose }) => {
     type: 'success' | 'error' | 'info';
     text: string;
   } | null>(null);
+  const [pastedText, setPastedText] = useState('');
+  const [isPasteExpanded, setIsPasteExpanded] = useState(false);
 
   const isElectron = UEUERPSessionManager.isElectronEnvironment();
 
@@ -102,11 +106,11 @@ export const UUERPModal: React.FC<UUERPModalProps> = ({ isOpen, onClose }) => {
           text: 'Authentication detected! Synchronizing student academic data...',
         });
 
-        // Trigger synchronization immediately after login
-        const syncRes = await UUERPSyncEngine.sync();
+        // Trigger synchronization immediately after login (pass HTML if available)
+        const syncRes = await UUERPSyncEngine.sync(loginRes.html);
         await reloadState();
 
-        if (syncRes.success) {
+        if (syncRes.success && syncRes.syncedSubjectsCount > 0) {
           setStatusMessage({
             type: 'success',
             text: `✅ Connected! Synchronized ${syncRes.syncedSubjectsCount} subjects from official UU-ERP portal.`,
@@ -114,7 +118,7 @@ export const UUERPModal: React.FC<UUERPModalProps> = ({ isOpen, onClose }) => {
         } else {
           setStatusMessage({
             type: 'info',
-            text: syncRes.message,
+            text: syncRes.message || 'Authenticated! You can also paste your attendance table below to sync instantly.',
           });
         }
       } else {
@@ -127,6 +131,107 @@ export const UUERPModal: React.FC<UUERPModalProps> = ({ isOpen, onClose }) => {
       setStatusMessage({
         type: 'error',
         text: `Connection error: ${err.message}`,
+      });
+    } finally {
+      setIsProcessing(false);
+      reloadState();
+    }
+  };
+
+  // 2. Direct Sync from Clipboard
+  const handleClipboardSync = async () => {
+    setIsProcessing(true);
+    setStatusMessage({
+      type: 'info',
+      text: 'Reading copied attendance table from clipboard...',
+    });
+
+    try {
+      if (!navigator.clipboard?.readText) {
+        setIsPasteExpanded(true);
+        setStatusMessage({
+          type: 'info',
+          text: 'Please paste your copied table into the box below and click Sync.',
+        });
+        return;
+      }
+
+      const text = await navigator.clipboard.readText();
+      if (!text || text.trim().length === 0) {
+        setIsPasteExpanded(true);
+        setStatusMessage({
+          type: 'error',
+          text: 'Clipboard is empty. Copy the attendance table from UU-ERP first, or paste manually below.',
+        });
+        return;
+      }
+
+      const syncRes = await UUERPSyncEngine.syncFromRawContent(text);
+      await reloadState();
+
+      if (syncRes.success && syncRes.syncedSubjectsCount > 0) {
+        setStatusMessage({
+          type: 'success',
+          text: `✅ Synced ${syncRes.syncedSubjectsCount} subjects successfully!`,
+        });
+        setPastedText('');
+        setIsPasteExpanded(false);
+      } else {
+        setStatusMessage({
+          type: 'error',
+          text: syncRes.message || 'Could not recognize attendance table in clipboard.',
+        });
+        setIsPasteExpanded(true);
+      }
+    } catch (err: any) {
+      setIsPasteExpanded(true);
+      setStatusMessage({
+        type: 'error',
+        text: `Clipboard access error: ${err.message}. Please paste below.`,
+      });
+    } finally {
+      setIsProcessing(false);
+      reloadState();
+    }
+  };
+
+  // 3. Direct Sync from Manual Paste
+  const handleManualPasteSync = async () => {
+    if (!pastedText || pastedText.trim().length === 0) {
+      setStatusMessage({
+        type: 'error',
+        text: 'Please paste the attendance table HTML or text into the box first.',
+      });
+      return;
+    }
+
+    setIsProcessing(true);
+    setStatusMessage({
+      type: 'info',
+      text: 'Parsing and synchronizing attendance records...',
+    });
+
+    try {
+      const syncRes = await UUERPSyncEngine.syncFromRawContent(pastedText);
+      await reloadState();
+
+      if (syncRes.success && syncRes.syncedSubjectsCount > 0) {
+        setStatusMessage({
+          type: 'success',
+          text: `✅ Synced ${syncRes.syncedSubjectsCount} subjects successfully!`,
+        });
+        setPastedText('');
+        setIsPasteExpanded(false);
+      } else {
+        setStatusMessage({
+          type: 'error',
+          text: syncRes.message || 'Could not parse attendance records. Please check the pasted text.',
+        });
+      }
+    } catch (err: any) {
+      setStatusMessage({
+        type: 'error',
+        text: `Parse error: ${err.message}`,
       });
     } finally {
       setIsProcessing(false);
@@ -283,19 +388,79 @@ export const UUERPModal: React.FC<UUERPModalProps> = ({ isOpen, onClose }) => {
           </div>
         )}
 
-        {/* Non-Electron Environment Warning */}
-        {!isElectron && (
-          <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs space-y-1">
-            <p className="font-bold flex items-center gap-1.5">
-              <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
-              Desktop App Mode Required for Live Login
-            </p>
-            <p className="text-[11px] text-amber-300/80">
-              Direct UU-ERP authentication requires Julie&apos;s desktop Electron runtime to render the official university login window and capture session cookies.
-              Launch Julie using <code className="bg-black/40 px-1 py-0.5 rounded text-[10px]">npm run electron</code>.
-            </p>
+        {/* Quick Paste & Instant Sync Card */}
+        <div className="p-3.5 rounded-2xl bg-gradient-to-br from-slate-900/90 to-blue-950/40 border border-white/10 space-y-2.5">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-sky-300 flex items-center gap-1.5">
+              <Clipboard className="w-3.5 h-3.5 text-sky-400" />
+              📋 Instant Table Sync (Web &amp; Desktop)
+            </span>
+            <button
+              type="button"
+              onClick={() => setIsPasteExpanded(!isPasteExpanded)}
+              className="text-[10px] font-semibold text-slate-400 hover:text-white transition-colors"
+            >
+              {isPasteExpanded ? 'Collapse ▲' : 'Manual Paste Box ▼'}
+            </button>
           </div>
-        )}
+
+          <p className="text-[11px] text-slate-300 leading-relaxed">
+            Copy the attendance table from{' '}
+            <a
+              href="https://uuerp.uudoon.in/Web_StudentAcademic/Cyborg_StudentAttendanceAcademic"
+              target="_blank"
+              rel="noreferrer"
+              className="text-sky-400 hover:underline inline-flex items-center gap-0.5"
+            >
+              <span>UU-ERP Attendance Page</span>
+              <ExternalLink className="w-2.5 h-2.5" />
+            </a>
+            {' '}and tap below to sync instantly.
+          </p>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleClipboardSync}
+              disabled={isSyncing}
+              className="flex-1 py-2.5 px-3 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 shadow-md active:scale-95 transition-all disabled:opacity-50"
+            >
+              <Clipboard className="w-3.5 h-3.5" />
+              <span>📋 Paste from Clipboard &amp; Sync</span>
+            </button>
+
+            <a
+              href="https://uuerp.uudoon.in/Web_StudentAcademic/Cyborg_StudentAttendanceAcademic"
+              target="_blank"
+              rel="noreferrer"
+              className="py-2.5 px-3 rounded-xl bg-white/10 hover:bg-white/15 text-slate-200 hover:text-white text-xs font-semibold flex items-center gap-1 transition-all"
+              title="Open Attendance Page in New Tab"
+            >
+              <span>Open ERP</span>
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
+
+          {isPasteExpanded && (
+            <div className="space-y-2 pt-1 animate-fade-in">
+              <textarea
+                value={pastedText}
+                onChange={(e) => setPastedText(e.target.value)}
+                placeholder="Paste copied UU-ERP attendance table rows or full page HTML here..."
+                className="w-full h-24 p-2.5 rounded-xl bg-black/50 border border-white/10 text-slate-200 placeholder-slate-500 text-xs font-mono focus:outline-none focus:border-sky-400 resize-none"
+              />
+              <button
+                type="button"
+                onClick={handleManualPasteSync}
+                disabled={isSyncing || !pastedText.trim()}
+                className="w-full py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md active:scale-95 transition-all disabled:opacity-50"
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>⚡ Parse &amp; Synchronize Pasted Data</span>
+              </button>
+            </div>
+          )}
+        </div>
 
         {/* ------------------------------------------------------------- */}
         {/* VIEW 1: CONNECTED STATE                                        */}

@@ -33,9 +33,76 @@ export interface ERPSyncExecutionResult {
 
 export class UUERPSyncEngine {
   /**
+   * Synchronizes data directly from raw HTML string or copied table text.
+   * Useful in Web/Vercel environments and manual paste workflows.
+   */
+  static async syncFromRawContent(rawContent: string): Promise<ERPSyncExecutionResult> {
+    UEUERPSessionManager.setState('SYNCING');
+
+    try {
+      const extracted: UUERPExtractedData = UUERPParser.parseAttendancePage(rawContent);
+
+      if (!extracted.subjects || extracted.subjects.length === 0) {
+        UEUERPSessionManager.setState('SYNC_ERROR', 'No subject records recognized');
+        return await this.getCachedResults(
+          'Could not extract attendance records from the provided content. Please ensure you copied the table from the UU-ERP attendance page.'
+        );
+      }
+
+      // Persist real subjects and attendance records into Dexie IndexedDB
+      const { syncedAttendanceCount } = await this.persistToDexie(extracted);
+
+      // Save student profile if extracted
+      if (extracted.profile && (extracted.profile.studentName || extracted.profile.studentId)) {
+        UEUERPSessionManager.saveProfile(extracted.profile);
+      }
+
+      // Set connected and record sync
+      UEUERPSessionManager.setState('CONNECTED');
+      UEUERPSessionManager.recordSyncSuccess();
+
+      // Mirror into ERPAuthVault
+      const profile = UEUERPSessionManager.getProfile();
+      const vaultSession: ERPAuthSession = {
+        provider: 'Uttaranchal University Cyborg-ERP',
+        portalUrl: 'https://uuerp.uudoon.in/Account/Login_UU',
+        studentId: profile?.studentId || 'Authenticated Student',
+        studentName: profile?.studentName || undefined,
+        program: profile?.program || undefined,
+        semester: profile?.semester || undefined,
+        status: 'connected',
+        lastSyncedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        expiresAt: new Date(Date.now() + 24 * 3600000).toISOString(),
+      };
+      ERPAuthVault.saveSession(vaultSession);
+
+      const overallPct = extracted.overall?.percentage ?? 0;
+      const msg = `✅ Synchronized ${extracted.subjects.length} subjects from official UU-ERP portal (${overallPct}% overall).`;
+
+      return {
+        success: true,
+        isFromCache: false,
+        syncedSubjectsCount: extracted.subjects.length,
+        syncedAttendanceCount,
+        overall: extracted.overall,
+        subjects: extracted.subjects,
+        profile: profile || undefined,
+        message: msg,
+      };
+    } catch (err: any) {
+      UEUERPSessionManager.setState('SYNC_ERROR', err.message);
+      return await this.getCachedResults(`Sync error: ${err.message}`);
+    }
+  }
+
+  /**
    * Executes a full synchronization cycle against the real university ERP portal.
    */
-  static async sync(): Promise<ERPSyncExecutionResult> {
+  static async sync(rawHtmlOverride?: string): Promise<ERPSyncExecutionResult> {
+    if (rawHtmlOverride && rawHtmlOverride.trim().length > 0) {
+      return await this.syncFromRawContent(rawHtmlOverride);
+    }
+
     UEUERPSessionManager.setState('SYNCING');
 
     // 1. Check if running in Electron environment
@@ -44,7 +111,7 @@ export class UUERPSyncEngine {
         '[UUERPSyncEngine] Desktop Electron shell not detected; checking local cache.'
       );
       return await this.getCachedResults(
-        'Native desktop shell required for live ERP sync. Showing locally synchronized cache.'
+        'Native desktop shell or attendance paste required for live ERP sync. Showing locally synchronized cache.'
       );
     }
 
@@ -66,59 +133,7 @@ export class UUERPSyncEngine {
       );
     }
 
-    // 3. Parse server-rendered HTML response
-    const extracted: UUERPExtractedData = UUERPParser.parseAttendancePage(fetchRes.html);
-
-    if (!extracted.subjects || extracted.subjects.length === 0) {
-      console.warn(
-        '[UUERPSyncEngine] No attendance rows detected in portal response (HTML length:',
-        extracted.rawHtmlLength,
-        ')'
-      );
-      return await this.getCachedResults(
-        'Attendance records were empty or currently unposted on the university portal.'
-      );
-    }
-
-    // 4. Persist real subjects and attendance records into Dexie IndexedDB
-    const { syncedAttendanceCount } = await this.persistToDexie(extracted);
-
-    // 5. Save student profile if extracted
-    if (extracted.profile && (extracted.profile.studentName || extracted.profile.studentId)) {
-      UEUERPSessionManager.saveProfile(extracted.profile);
-    }
-
-    // 6. Record successful synchronization metadata
-    UEUERPSessionManager.recordSyncSuccess();
-
-    // 7. Mirror into ERPAuthVault for UI compatibility
-    const profile = UEUERPSessionManager.getProfile();
-    const vaultSession: ERPAuthSession = {
-      provider: 'Uttaranchal University Cyborg-ERP',
-      portalUrl: 'https://uuerp.uudoon.in/Account/Login_UU',
-      studentId: profile?.studentId || 'Authenticated Student',
-      studentName: profile?.studentName || undefined,
-      program: profile?.program || undefined,
-      semester: profile?.semester || undefined,
-      status: 'connected',
-      lastSyncedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      expiresAt: new Date(Date.now() + 24 * 3600000).toISOString(),
-    };
-    ERPAuthVault.saveSession(vaultSession);
-
-    const overallPct = extracted.overall?.percentage ?? 0;
-    const msg = `✅ Synchronized ${extracted.subjects.length} subjects from official UU-ERP portal (${overallPct}% overall).`;
-
-    return {
-      success: true,
-      isFromCache: false,
-      syncedSubjectsCount: extracted.subjects.length,
-      syncedAttendanceCount,
-      overall: extracted.overall,
-      subjects: extracted.subjects,
-      profile: profile || undefined,
-      message: msg,
-    };
+    return await this.syncFromRawContent(fetchRes.html);
   }
 
   /**
